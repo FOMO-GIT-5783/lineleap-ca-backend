@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Owner Monitor Test</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <h2>Venue Monitor</h2>
+    <div id="stats"></div>
+
+    <script>
+    const socket = io('http://localhost:3000', {
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    transports: ['websocket', 'polling']
+});
+        const venueId = '6719beeeec30ce0377067c1a';
+
+        socket.on('connect', () => {
+            console.log('Connected to socket');
+            socket.emit('joinOwnerRoom', venueId);
+        });
+
+        // Add heartbeat check
+        setInterval(() => {
+            const start = Date.now();
+            socket.emit('ping');
+            socket.on('pong', () => {
+                console.log('Latency:', Date.now() - start, 'ms');
+            });
+        }, 30000);
+
+
+        socket.on('ownerStats', (data) => {
+            console.log('Received stats:', data);
+            document.getElementById('stats').innerHTML = JSON.stringify(data, null, 2);
+        });
+    </script>
+</body>
+</html>

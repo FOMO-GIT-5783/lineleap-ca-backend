@@ -1,0 +1,36 @@
+FROM node:18-alpine
+
+# Install dependencies
+RUN apk add --no-cache tini curl
+
+# Create app directory
+WORKDIR /app
+
+# Install app dependencies
+COPY package*.json ./
+RUN npm ci --production && \
+    npm cache clean --force
+
+# Copy app source
+COPY scripts/deployMetrics.cjs .
+COPY utils/logger.cjs ./utils/
+
+# Create log directory
+RUN mkdir -p /var/log/lineleap && \
+    chown -R node:node /var/log/lineleap
+
+# Switch to non-root user
+USER node
+
+# Set environment
+ENV NODE_ENV=production \
+    NODE_OPTIONS="--max-old-space-size=256"
+
+# Expose port
+EXPOSE 9090
+
+# Use tini as entrypoint
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Start the service
+CMD ["node", "deployMetrics.cjs"] 

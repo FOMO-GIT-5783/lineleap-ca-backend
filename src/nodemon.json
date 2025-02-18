@@ -1,0 +1,6 @@
+{
+  "watch": ["."],
+  "ext": ".cjs,.json",
+  "ignore": ["**/*.spec.js"],
+  "exec": "node server.cjs"
+} 

@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  api:
+    image: node:18-alpine
+    command: >
+      /bin/sh -c "
+        apk add --no-cache curl &&
+        node -e \"require('http').createServer((req,res) => {
+          if (req.url === '/health') {
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({
+              status: 'healthy',
+              circuitBreakers: {
+                stripe: {status: 'closed'},
+                database: {status: 'closed'}
+              }
+            }));
+          } else {
+            res.statusCode = 404;
+            res.end();
+          }
+        }).listen(3000, '0.0.0.0')\""
+    networks:
+      - monitoring
+    ports:
+      - "3001:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
+  metrics:
+    build:
+      context: .
+      dockerfile: Dockerfile.metrics
+    networks:
+      - monitoring
+    ports:
+      - "9091:9090"
+    env_file: .env.metrics
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:9090/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  monitoring:
+    external: true
+    name: lineleap-monitoring 

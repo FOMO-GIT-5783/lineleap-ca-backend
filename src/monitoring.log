@@ -1,0 +1,5 @@
+=== Monitoring Started Wed Feb  5 00:15:12 AST 2025 ===
+2025-02-05 00:15:12 [[0;32mINFO] Running in test mode...
+2025-02-05 00:15:12 [[0;32mINFO] Circuit breakers healthy
+2025-02-05 00:15:14 [[0;32mINFO] Memory usage for src-api-1: Memory 39.23%, CPU 0.00%
+2025-02-05 00:15:14 [[0;32mINFO] Memory usage for src-metrics-1: Memory 16.08%, CPU 0.76%

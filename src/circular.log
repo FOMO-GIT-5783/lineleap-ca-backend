@@ -1,0 +1,13 @@
+
+> lineleap-backend@1.0.0 test:circular
+> npx dpdm server.cjs --circular --warning
+
+• Dependencies Tree
+  - 0) server.cjs
+
+• Circular Dependencies
+  ✅ Congratulations, no circular dependency was found in your project.
+
+• Warnings
+
+

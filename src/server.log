@@ -1,0 +1,12 @@
+2025-02-18 02:24:16 [32m[32minfo[32m[39m: [32m[32mLogger initialized[32m[39m
+{
+  "environment": "development",
+  "methods": [
+    "error",
+    "warn",
+    "info",
+    "http",
+    "debug"
+  ]
+}
+2025-02-18 02:24:16 [32m[32minfo[32m[39m: [32m[32mRunning with local cache only[32m[39m
