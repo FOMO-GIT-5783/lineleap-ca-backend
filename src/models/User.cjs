@@ -12,8 +12,9 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['customer', 'bartender', 'owner', 'admin'],
-    required: true
+    enum: ['customer', 'owner', 'admin'],
+    required: true,
+    default: 'customer'
   },
   auth0Id: {
     type: String,

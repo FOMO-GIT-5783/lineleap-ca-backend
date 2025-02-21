@@ -211,6 +211,7 @@ const requireVenueOwner = (options = {}) => {
     return requireAuth({ ...options, role: USER_ROLES.VENUE_OWNER });
 };
 
+// Export middleware functions
 module.exports = {
     requireAuth,
     requireCustomer,

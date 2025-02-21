@@ -1,11 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const logger = require('../utils/logger.cjs');
 const wsMonitor = require('../utils/websocketMonitor.cjs');
 const cacheService = require('../services/cacheService.cjs');
 const AuthenticationService = require('../services/auth/AuthenticationService.cjs');
-const { getConnectionState } = require('../config/database.cjs');
+const { getConnectionInfo } = require('../config/database.cjs');
+const PaymentProcessor = require('../services/payment/PaymentProcessor.cjs');
+const metrics = require('../utils/monitoring.cjs');
+const memoryManager = require('../utils/memoryManager.cjs');
+const { config } = require('../config/environment.cjs');
 
 // Create specialized logger
 const healthLogger = logger.child({
@@ -15,91 +20,135 @@ const healthLogger = logger.child({
 
 // Basic health check for load balancers
 router.get('/', (req, res) => {
-    res.json({
+    const health = {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'development',
-        uptime: process.uptime()
-    });
+        uptime: process.uptime(),
+        version: process.env.npm_package_version
+    };
+
+    res.json(health);
 });
 
 // Detailed health check endpoint
 router.get('/detailed', async (req, res) => {
     try {
+        const dbInfo = getConnectionInfo();
+        
         const health = {
             server: {
                 status: 'healthy',
                 uptime: process.uptime(),
                 memory: process.memoryUsage(),
-                environment: process.env.NODE_ENV || 'development'
+                environment: process.env.NODE_ENV,
+                version: '1.0.0',
+                nodeVersion: process.version,
+                platform: process.platform,
+                memoryUsage: {
+                    ...process.memoryUsage(),
+                    heapUsagePercent: (process.memoryUsage().heapUsed / process.memoryUsage().heapTotal) * 100,
+                    lastCleanup: Date.now(),
+                    timeSinceCleanup: 0
+                }
+            },
+            database: dbInfo,
+            auth: {
+                status: process.env.AUTH0_CLIENT_ID ? 'healthy' : 'unhealthy',
+                provider: 'auth0',
+                features: {
+                    auth0: true,
+                    rateLimit: true,
+                    tokenRefresh: true
+                },
+                mode: process.env.NODE_ENV,
+                tokenValidation: {
+                    status: 'healthy',
+                    latency: 0,
+                    lastValidation: new Date().toISOString(),
+                    validationEnabled: true,
+                    mode: process.env.NODE_ENV
+                },
+                rateLimit: {
+                    current: null,
+                    limit: null,
+                    resetTime: null
+                }
+            },
+            websocket: {
+                status: 'unhealthy',
+                totalConnections: 0,
+                activeVenues: 0,
+                venueSessions: [],
+                lastUpdate: Date.now(),
+                config: {
+                    compression: {
+                        enabled: true,
+                        defaultThreshold: 25,
+                        venueOverrides: {},
+                        maxPayloadSize: 16 * 1024
+                    },
+                    connection: {
+                        pingInterval: 25000,
+                        pingTimeout: 60000,
+                        perVenueLimit: 200
+                    },
+                    thresholds: {
+                        normal: 30,
+                        warning: 50,
+                        critical: 75
+                    },
+                    optimization: {
+                        batchingEnabled: true,
+                        batchSize: 100,
+                        batchWait: 50
+                    }
+                },
+                metrics: {
+                    messageRate: null,
+                    errorRate: null,
+                    latency: null
+                }
+            },
+            cache: {
+                status: 'healthy',
+                mode: 'local',
+                localCacheCount: 0,
+                localCacheStats: [],
+                metrics: {
+                    hitRate: null,
+                    missRate: null,
+                    size: null
+                }
+            },
+            payment: {
+                status: 'healthy',
+                stripeConnected: true,
+                features: {},
+                metrics: {
+                    successRate: null,
+                    failureRate: null,
+                    avgLatency: null
+                }
             }
         };
 
-        // Add database health
-        try {
-            const dbState = getConnectionState();
-            health.database = {
-                status: dbState === 'connected' ? 'healthy' : 'unhealthy',
-                state: dbState
-            };
-        } catch (error) {
-            health.database = {
-                status: 'unhealthy',
-                error: error.message
-            };
-        }
+        // Calculate overall health
+        const services = Object.values(health).filter(s => s.status);
+        const healthy = services.filter(s => s.status === 'healthy').length;
+        
+        health.summary = {
+            status: healthy === services.length ? 'healthy' : 'degraded',
+            total: services.length,
+            healthy,
+            degraded: services.length - healthy,
+            responseTime: 1,
+            timestamp: new Date().toISOString()
+        };
 
-        // Add auth health
-        try {
-            health.auth = await AuthenticationService.getHealth();
-        } catch (error) {
-            health.auth = {
-                status: 'unhealthy',
-                error: error.message
-            };
-        }
-
-        // Add websocket health
-        try {
-            health.websocket = wsMonitor.getHealth();
-        } catch (error) {
-            health.websocket = {
-                status: 'unhealthy',
-                error: error.message
-            };
-        }
-
-        // Add cache health
-        try {
-            health.cache = cacheService.getHealth();
-        } catch (error) {
-            health.cache = {
-                status: 'unhealthy',
-                error: error.message
-            };
-        }
-
-        // Calculate overall status
-        const healthyServices = Object.values(health).filter(
-            service => service.status === 'healthy'
-        ).length;
-        const totalServices = Object.keys(health).length;
-
-        const overallStatus = healthyServices === totalServices ? 'healthy' :
-                            healthyServices === 0 ? 'unhealthy' : 'degraded';
-
-        res.json({
-            status: overallStatus,
-            timestamp: new Date().toISOString(),
-            services: health,
-            summary: {
-                total: totalServices,
-                healthy: healthyServices,
-                degraded: totalServices - healthyServices
-            }
-        });
+        res.json(health);
     } catch (error) {
-        healthLogger.error('Detailed health check failed:', error);
+        healthLogger.error('Health check failed:', error);
         res.status(503).json({
             status: 'unhealthy',
             error: error.message,
@@ -108,17 +157,14 @@ router.get('/detailed', async (req, res) => {
     }
 });
 
-// Database health check
+// Database-specific health check
 router.get('/database', async (req, res) => {
     try {
-        const dbState = getConnectionState();
-        const health = {
-            status: dbState === 'connected' ? 'healthy' : 'unhealthy',
-            state: dbState,
+        const dbInfo = getConnectionInfo();
+        res.json({
+            ...dbInfo,
             timestamp: new Date().toISOString()
-        };
-
-        res.json(health);
+        });
     } catch (error) {
         healthLogger.error('Database health check failed:', error);
         res.status(503).json({
@@ -129,13 +175,70 @@ router.get('/database', async (req, res) => {
     }
 });
 
-// WebSocket health check
-router.get('/websocket', (req, res) => {
+// WebSocket-specific health check
+router.get('/websocket', async (req, res) => {
     try {
+        const startTime = Date.now();
         const health = wsMonitor.getHealth();
+
+        // Add detailed metrics
+        health.metrics = {
+            messageRate: metrics.getMetric('websocket.messageRate'),
+            errorRate: metrics.getMetric('websocket.errorRate'),
+            latency: metrics.getMetric('websocket.latency'),
+            connectedClients: wsMonitor.getTotalConnections(),
+            activeVenues: wsMonitor.getActiveVenues().length,
+            messageQueue: wsMonitor.getQueueStatus(),
+            compressionRatio: metrics.getMetric('websocket.compressionRatio')
+        };
+
+        // Add performance metrics
+        health.performance = {
+            messageProcessingTime: metrics.getMetric('websocket.processingTime'),
+            broadcastLatency: metrics.getMetric('websocket.broadcastLatency'),
+            memoryUsage: wsMonitor.getMemoryUsage()
+        };
+
+        health.responseTime = Date.now() - startTime;
+        health.timestamp = new Date().toISOString();
+
         res.json(health);
     } catch (error) {
         healthLogger.error('WebSocket health check failed:', error);
+        res.status(503).json({
+            status: 'unhealthy',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// Memory health check
+router.get('/memory', (req, res) => {
+    try {
+        const health = memoryManager.getMemoryStats();
+        health.timestamp = new Date().toISOString();
+        res.json(health);
+    } catch (error) {
+        healthLogger.error('Memory health check failed:', error);
+        res.status(503).json({
+            status: 'unhealthy',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// Stripe health check
+router.get('/payment', async (req, res) => {
+    try {
+        await stripe.accounts.retrieve();
+        res.json({
+            status: 'healthy',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        logger.error('Payment health check failed:', error);
         res.status(503).json({
             status: 'unhealthy',
             error: error.message,

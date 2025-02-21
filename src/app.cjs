@@ -38,98 +38,156 @@ const app = express();
 
 // Initialize core services
 let servicesInitialized = false;
+let dbConnection = null;
+let initializationInProgress = null;  // Track initialization promise
+
+// Categorize services by database dependency
+const DB_REQUIRED_SERVICES = ['payment-processor', 'auth-service'];
+const DB_OPTIONAL_SERVICES = ['monitoring-dashboard', 'cache-service'];
 
 async function initializeServices() {
+    // Return existing initialization if in progress
+    if (initializationInProgress) {
+        return initializationInProgress;
+    }
+
+    // Return early if already initialized
     if (servicesInitialized) {
-        return;
+        return true;
+    }
+
+    // Start initialization
+    initializationInProgress = (async () => {
+        try {
+            // 1. Initialize database connection FIRST and wait for it
+            appLogger.info('Initializing database connection...');
+            dbConnection = await connectDB();
+
+            // In production, we must have DB connection
+            if (!dbConnection && process.env.NODE_ENV === 'production') {
+                throw new Error('Failed to connect to MongoDB in production');
+            }
+
+            const hasDbConnection = !!dbConnection;
+            
+            if (!hasDbConnection) {
+                appLogger.warn('Database connection not available', {
+                    environment: process.env.NODE_ENV,
+                    mode: 'limited'
+                });
+            } else {
+                appLogger.info('Database connection successful', {
+                    host: dbConnection.connection.host,
+                    database: dbConnection.connection.name,
+                    readyState: dbConnection.connection.readyState
+                });
+            }
+
+            // 2. Initialize event system (no DB dependency)
+            appLogger.info('Initializing event system...');
+            await eventEmitter.initialize();
+            appLogger.info('Event system initialized');
+
+            // 3. Initialize cache service (no DB dependency)
+            appLogger.info('Initializing cache service...');
+            await cacheService.initialize();
+            appLogger.info('Cache service initialized');
+
+            // 4. Initialize monitoring (optional DB dependency)
+            if (hasDbConnection || process.env.NODE_ENV === 'development') {
+                appLogger.info('Initializing WebSocket monitor...');
+                await wsMonitor.initialize({
+                    dependencies: {
+                        events: eventEmitter,
+                        cache: cacheService
+                    }
+                });
+                appLogger.info('WebSocket monitor initialized');
+
+                appLogger.info('Initializing monitoring dashboard...');
+                await monitoringDashboard.initialize({
+                    dependencies: {
+                        events: eventEmitter,
+                        cache: cacheService,
+                        wsMonitor: wsMonitor
+                    }
+                });
+                appLogger.info('Monitoring dashboard initialized');
+            }
+
+            // 5. Initialize critical services (require DB)
+            if (hasDbConnection) {
+                appLogger.info('Initializing payment processor...');
+                await PaymentProcessor.initialize({
+                    dependencies: {
+                        cache: cacheService,
+                        events: eventEmitter
+                    }
+                });
+                appLogger.info('Payment processor initialized');
+            } else if (process.env.NODE_ENV === 'production') {
+                throw new Error('Cannot initialize payment services without database connection');
+            } else {
+                appLogger.warn('Payment services not initialized - database connection required');
+            }
+
+            servicesInitialized = true;
+            return true;
+        } catch (error) {
+            appLogger.error('Service initialization failed:', error);
+            if (process.env.NODE_ENV === 'production') {
+                throw error;
+            }
+            servicesInitialized = true;
+            return false;
+        } finally {
+            initializationInProgress = null;
+        }
+    })();
+
+    return initializationInProgress;
+}
+
+// Middleware to check service requirements
+const checkServiceRequirements = (req, res, next) => {
+    // Always allow health check endpoints
+    if (req.path.startsWith('/health')) {
+        return next();
+    }
+
+    // Check if path requires database
+    const requiresDb = DB_REQUIRED_SERVICES.some(service => 
+        req.path.includes(service.split('-')[0])
+    );
+
+    if (requiresDb && !dbConnection) {
+        const error = new Error('Service unavailable - database connection required');
+        error.status = 503;
+        return next(error);
+    }
+
+    next();
+};
+
+// Middleware to ensure services are ready
+const ensureServicesReady = async (req, res, next) => {
+    // Always allow health checks
+    if (req.path.startsWith('/health')) {
+        return next();
     }
 
     try {
-        // 1. Initialize event system first
-        const eventEmitter = require('./utils/eventEmitter.cjs');
-        await eventEmitter.initialize();
-        appLogger.info('Event system initialized');
-
-        // 2. Initialize cache service
-        await cacheService.initialize();
-        appLogger.info('Cache service initialized');
-
-        // 3. Initialize database connection
-        const dbConnection = await connectDB();
-        if (!dbConnection && process.env.NODE_ENV === 'production') {
-            throw new Error('Failed to connect to MongoDB in production');
+        // Wait for initialization if not ready
+        if (!servicesInitialized) {
+            await initializeServices();
         }
-        appLogger.info('Database connection initialized');
 
-        // 4. Initialize feature manager (depends on cache and events)
-        await FeatureManager.initialize({
-            dependencies: {
-                cache: cacheService,
-                events: eventEmitter
-            }
-        });
-        appLogger.info('Feature manager initialized');
-
-        // 5. Initialize auth service (depends on features, cache, events)
-        await AuthenticationService.initialize({
-            dependencies: {
-                cache: cacheService,
-                events: eventEmitter,
-                features: FeatureManager
-            }
-        });
-        appLogger.info('Authentication service initialized');
-
-        // 6. Initialize WebSocket monitor (depends on events)
-        const wsMonitor = require('./utils/websocketMonitor.cjs');
-        await wsMonitor.initialize({
-            dependencies: {
-                events: eventEmitter,
-                cache: cacheService
-            }
-        });
-        appLogger.info('WebSocket monitor initialized');
-
-        // 7. Initialize payment services
-        await PaymentProcessor.initialize({
-            dependencies: {
-                cache: cacheService,
-                events: eventEmitter,
-                auth: AuthenticationService
-            }
-        });
-        appLogger.info('Payment processor initialized');
-
-        // 8. Initialize monitoring last
-        await monitoringDashboard.initialize({
-            dependencies: {
-                events: eventEmitter,
-                cache: cacheService,
-                auth: AuthenticationService,
-                wsMonitor: wsMonitor
-            }
-        });
-        appLogger.info('Monitoring dashboard initialized');
-
-        servicesInitialized = true;
-        appLogger.info('All services initialized successfully');
-
-        return true;
+        // Check service requirements after initialization
+        checkServiceRequirements(req, res, next);
     } catch (error) {
-        appLogger.error('Service initialization failed:', {
-            error: error.message,
-            stack: error.stack
-        });
-        
-        if (process.env.NODE_ENV === 'production') {
-            throw error;
-        }
-        
-        // In development, continue with degraded functionality
-        servicesInitialized = true;
-        return false;
+        next(error);
     }
-}
+};
 
 // Phase 1: Base middleware
 app.use(timeout(process.env.NODE_ENV === 'production' ? '30s' : '120s'));
@@ -159,19 +217,8 @@ app.use((req, res, next) => {
     next();
 });
 
-// Ensure services are initialized before handling requests
-app.use(async (req, res, next) => {
-    if (!servicesInitialized) {
-        try {
-            await initializeServices();
-            next();
-        } catch (error) {
-            next(error);
-        }
-    } else {
-        next();
-    }
-});
+// Add service initialization check early in middleware chain
+app.use(ensureServicesReady);
 
 // Phase 2: Security middleware
 app.use(helmet());
@@ -202,4 +249,9 @@ configureRoutes(app);
 // Phase 6: Error handling
 app.use(errorHandler);
 
-module.exports = { app, initializeServices }; 
+// Export for use in server.js
+module.exports = { 
+    app, 
+    initializeServices,
+    getDbConnection: () => dbConnection 
+}; 

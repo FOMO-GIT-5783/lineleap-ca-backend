@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const PassService = require('../services/passService.cjs');
-const { requireCustomer, requireBartender } = require('../middleware/authMiddleware.cjs');
+const { requireCustomer, requireVenueOwner, requireAdmin } = require('../middleware/authMiddleware.cjs');
 const OrderMetricsService = require('../services/orderMetricsService.cjs');
 const { requireAuth } = require('../middleware/authMiddleware.cjs');
 const Pass = require('../models/Pass.cjs');
@@ -92,7 +92,7 @@ router.get('/:passId', requireAuth(), async (req, res, next) => {
         }
 
         // Verify ownership or staff access
-        if (!pass.userId.equals(req.user._id) && !req.user.hasRole(['admin', 'bartender'])) {
+        if (!pass.userId.equals(req.user._id) && !req.user.hasRole(['admin', 'owner'])) {
             throw createError.authorization(ERROR_CODES.UNAUTHORIZED);
         }
 
@@ -118,45 +118,36 @@ router.post('/:passId/redeem', requireCustomer(), async (req, res) => {
     }
 });
 
-// Bartender Pass Routes
-// ===================
-
-router.get('/venue/:venueId/active', requireBartender(), async (req, res, next) => {
+// Venue Management Routes
+router.get('/venue/:venueId/active', requireVenueOwner(), async (req, res, next) => {
     try {
         const { venueId } = req.params;
-        const passes = await PassService.getActivePasses(venueId);
+        const passes = await PassService.getActivePassesForVenue(venueId);
         res.json({ status: 'success', data: passes });
     } catch (error) {
-        passLogger.error('Failed to fetch active passes:', error);
         next(error);
     }
 });
 
-router.patch('/:passId/status', requireBartender, async (req, res) => {
+router.patch('/:passId/status', requireVenueOwner(), async (req, res, next) => {
     try {
         const { passId } = req.params;
         const { status } = req.body;
-        const pass = await PassService.updatePassStatus(passId, status);
-        await OrderMetricsService.trackPassStatusChange(pass);
+        const pass = await PassService.updatePassStatus(passId, status, req.user._id);
         res.json({ status: 'success', data: pass });
     } catch (error) {
-        console.error('Error updating pass status:', error);
-        res.status(400).json({ status: 'error', message: error.message });
+        next(error);
     }
 });
 
-router.post('/:passId/verify', requireBartender, async (req, res) => {
+router.post('/:passId/validate', requireVenueOwner(), async (req, res, next) => {
     try {
         const { passId } = req.params;
-        const { verificationCode } = req.body;
-        const pass = await PassService.verifyPassByBartender(passId, verificationCode);
-        await OrderMetricsService.trackPassVerification(pass, true);
+        const { location } = req.body;
+        const pass = await PassService.validatePass(passId, req.user._id, location);
         res.json({ status: 'success', data: pass });
     } catch (error) {
-        console.error('Error verifying pass:', error);
-        const { passId } = req.params;
-        await OrderMetricsService.trackPassVerification({ _id: passId }, false);
-        res.status(400).json({ status: 'error', message: error.message });
+        next(error);
     }
 });
 
@@ -174,25 +165,6 @@ router.get('/mine', requireCustomer(), async (req, res, next) => {
 
         res.json(passes);
     } catch (error) {
-        next(error);
-    }
-});
-
-// Validate pass
-router.post('/:passId/validate', requireBartender(), async (req, res, next) => {
-    try {
-        const { passId } = req.params;
-        const isValid = await PassService.validatePass(passId);
-        
-        res.json({ 
-            status: 'success', 
-            data: { 
-                valid: isValid,
-                passId
-            } 
-        });
-    } catch (error) {
-        passLogger.error('Failed to validate pass:', error);
         next(error);
     }
 });

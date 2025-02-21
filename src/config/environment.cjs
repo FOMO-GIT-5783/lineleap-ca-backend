@@ -1,5 +1,18 @@
 const path = require('path');
 const dotenv = require('dotenv');
+const logger = require('../utils/logger.cjs');
+
+// Create config logger
+const configLogger = logger.child({
+    context: 'config',
+    service: 'environment'
+});
+
+// Required environment variables
+const REQUIRED_VARS = {
+    development: ['MONGODB_URI', 'AUTH0_CLIENT_ID', 'AUTH0_CLIENT_SECRET'],
+    production: ['MONGODB_URI', 'AUTH0_CLIENT_ID', 'AUTH0_CLIENT_SECRET', 'AUTH0_ISSUER_BASE_URL', 'STRIPE_SECRET_KEY']
+};
 
 // Load appropriate .env file based on environment
 const loadEnvFile = () => {
@@ -13,8 +26,19 @@ const loadEnvFile = () => {
         if (result.error) {
             throw new Error(`Error loading ${envFile}. Create a ${envFile} file with required variables.`);
         }
+
+        // Validate required environment variables
+        const missing = REQUIRED_VARS[env]?.filter(key => !process.env[key]);
+        if (missing?.length) {
+            throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+        }
+
+        configLogger.info('Environment configuration loaded', {
+            environment: env,
+            configPath: envPath
+        });
     } catch (error) {
-        console.error('Environment configuration error:', error);
+        configLogger.error('Environment configuration error:', error);
         throw error;
     }
 };
@@ -53,13 +77,7 @@ const config = {
     },
     database: {
         uri: process.env.MONGODB_URI,
-        options: {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-            maxPoolSize: 10,
-            serverSelectionTimeoutMS: 5000,
-            socketTimeoutMS: 45000
-        }
+        name: process.env.MONGODB_URI?.split('/').pop()?.split('?')[0] || 'fomo_dev'
     },
     stripe: {
         secretKey: process.env.STRIPE_SECRET_KEY,
@@ -73,5 +91,14 @@ const config = {
         }
     }
 };
+
+// Log sanitized configuration
+configLogger.info('Configuration initialized', {
+    environment: config.server.env,
+    database: {
+        name: config.database.name,
+        uri: config.database.uri?.replace(/(mongodb\+srv:\/\/)([^@]+)@/, '$1***:***@')
+    }
+});
 
 module.exports = { config }; 

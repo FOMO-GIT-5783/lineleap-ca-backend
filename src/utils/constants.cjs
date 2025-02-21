@@ -59,7 +59,6 @@ const SCHEDULE_TYPES = [
 // User roles
 const USER_ROLES = [
     'customer',
-    'bartender',
     'owner',
     'admin'
 ];

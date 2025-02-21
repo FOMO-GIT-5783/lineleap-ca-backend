@@ -366,6 +366,26 @@ class WebSocketMonitor extends BaseService {
         this.totalConnections = 0;
         this.logger.info('WebSocket monitor cleaned up');
     }
+
+    getActiveVenues() {
+        return Array.from(this.venueConnections.keys());
+    }
+
+    getMemoryUsage() {
+        return {
+            connections: this.connections.size,
+            venues: this.venueConnections.size,
+            metrics: this.metrics ? Object.keys(this.metrics).length : 0
+        };
+    }
+
+    getQueueStatus() {
+        return {
+            size: this.messageQueue ? this.messageQueue.length : 0,
+            maxSize: this.config.optimization.batchSize || 100,
+            processing: !!this.processingQueue
+        };
+    }
 }
 
 // Export singleton instance for backward compatibility

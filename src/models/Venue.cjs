@@ -181,10 +181,9 @@ const passConfigSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    instructions: {
+    redemptionInstructions: {
         type: String,
-        required: true,
-        default: "Show this pass to the bartender. The bartender will redeem the pass."
+        default: "Show this pass to the venue staff. They will redeem the pass."
     },
     warning: {
         type: String,

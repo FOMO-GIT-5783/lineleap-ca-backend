@@ -1,0 +1,175 @@
+---
+description: Config validation before init, Middleware security chaining, Model schema hardening, Route payload validation, Service single-responsibility, Utils pure-function enforcement, Scripts idempotent-by-design, Test real-world scenario prioritization.
+globs: src/config/, src/middleware/, src/models/, src/routes/, src/services/, src/utils/, src/scripts/, src/test/
+---
+**1. Critical Thinking Framework**
+
+*Before any code change:*
+
+```python
+def assess_impact(change):
+    return {
+        'dependency_risk': calc_dependency_risk(),
+        'knowledge_gap': find_knowledge_gaps(),
+        'rollback_cost': estimate_rollback_effort(),
+        'validation_plan': create_validation_scenarios()
+    }
+
+# Thresholds from historical data
+ACCEPTABLE_RISK = lambda: (
+    dependency_risk < 0.3 and
+    knowledge_gap < 0.5 and
+    rollback_cost < 2.5
+)
+
+```
+
+**2. Adaptive Debugging Process**
+
+```mermaid
+graph TD
+    A[Observe Failure] --> B{Core Service?}
+    B -->|Yes| C[Full System Snapshot]
+    B -->|No| D[Targeted Metrics]
+    C --> E[Compare Baseline]
+    D --> F[Add Contextual Logging]
+    E --> G[Identify Deviation]
+    F --> G
+    G --> H[Form Hypothesis]
+    H --> I[Validate via Shadow Mode]
+    I --> J{Confirmed?}
+    J -->|Yes| K[Implement Fix]
+    J -->|No| L[Expand Observation]
+
+```
+
+**3. Code Evolution Standards**
+
+*When modifying legacy components:*
+
+```tsx
+interface LegacyModRule {
+    readonly preserveInterfaces: boolean;
+    readonly addTelemetryFirst: boolean;
+    readonly maxChangedLines: number;
+    readonly requiredApprovals: number;
+}
+
+const LEGACY_RULES: Record<ComponentType, LegacyModRule> = {
+    DATABASE: {
+        preserveInterfaces: true,
+        addTelemetryFirst: true,
+        maxChangedLines: 50,
+        requiredApprovals: 2
+    },
+    AUTH: {
+        preserveInterfaces: true,
+        addTelemetryFirst: true,
+        maxChangedLines: 30,
+        requiredApprovals: 3
+    }
+};
+
+```
+
+**4. Knowledge Preservation System**
+
+```rust
+struct KnowledgeArtifact {
+    decision_record: ArchitectureDecision,
+    operational_context: SystemSnapshot,
+    failure_modes: Vec<FailureScenario>,
+    tribal_knowledge: Vec<ExpertInterview>
+}
+
+impl KnowledgeArtifact {
+    fn validate(&self) -> bool {
+        !self.tribal_knowledge.is_empty() &&
+        self.failure_modes.len() >= 3
+    }
+}
+
+```
+
+**5. Risk-Managed Deployment**
+
+```bash
+# Multi-stage verification pipeline
+run_validation() {
+    # Phase 1: Local simulation
+    make local-simulation SCENARIO=$1
+
+    # Phase 2: Staging dry-run
+    ssh staging "sudo deploy --dry-run --change-id $CHANGE_ID"
+
+    # Phase 3: Canary analysis
+    analyze_metrics --before snapshots/before.json \\
+                    --after snapshots/after.json \\
+                    --threshold 0.15
+}
+
+# Usage: run_validation "connection-pool-change"
+
+```
+
+**6. Cognitive Load Management**
+
+*3-Level Understanding Protocol:*
+
+```python
+def understand_component(component, time_budget):
+    with Level1Understanding(deadline=time_budget*0.1):
+        grasp_purpose(component)
+
+    with Level2Understanding(deadline=time_budget*0.6):
+        trace_main_workflow(component)
+
+    with Level3Understanding(deadline=time_budget*0.3):
+        analyze_failure_paths(component)
+
+```
+
+**7. Evolutionary Architecture Guard**
+
+```tsx
+type FitnessFunction = (system: SystemState) => boolean;
+
+const ARCHITECTURE_GUARDS: FitnessFunction[] = [
+    // Connection health
+    (s) => s.dbConnections < s.dbPoolSize * 0.8,
+
+    // Auth latency
+    (s) => s.authLatency.p95 < 3000,
+
+    // Payment success rate
+    (s) => s.paymentSuccessRate > 99.5,
+
+    // Knowledge distribution
+    (s) => s.documentationCoverage > 0.7
+];
+
+```
+
+**8. Post-Mortem Protocol**
+
+```markdown
+1. **Timeline Reconstruction**
+   - Event sequence with 5-second granularity
+   - Service dependency mapping
+
+2. **Causal Analysis**
+   - Root cause vs contributing factors
+   - First-principles breakdown
+
+3. **Corrective Actions**
+   - Short-term: Hotfix validation
+   - Long-term: Architecture improvement
+
+4. **Knowledge Packaging**
+   - Add to runbook
+   - Create failure injection test
+   - Update monitoring thresholds
+
+```
+
+---
