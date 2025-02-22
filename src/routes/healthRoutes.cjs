@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const promClient = require('prom-client');
+const { metrics } = require('@opentelemetry/api');
 const logger = require('../utils/logger.cjs');
 const wsMonitor = require('../utils/websocketMonitor.cjs');
 const cacheService = require('../services/cacheService.cjs');
@@ -49,9 +51,16 @@ router.get('/detailed', async (req, res) => {
             };
         }
 
-        // Add auth health
+        // Add auth health with metrics
         try {
-            health.auth = await AuthenticationService.getHealth();
+            const authHealth = await AuthenticationService.getHealth();
+            health.auth = {
+                ...authHealth,
+                metrics: {
+                    requests: await promClient.register.getSingleMetric('auth_requests_total')?.get(),
+                    latency: await promClient.register.getSingleMetric('auth_latency_ms')?.get()
+                }
+            };
         } catch (error) {
             health.auth = {
                 status: 'unhealthy',
@@ -59,9 +68,16 @@ router.get('/detailed', async (req, res) => {
             };
         }
 
-        // Add websocket health
+        // Add websocket health with metrics
         try {
-            health.websocket = wsMonitor.getHealth();
+            const wsHealth = wsMonitor.getHealth();
+            health.websocket = {
+                ...wsHealth,
+                metrics: {
+                    connections: await promClient.register.getSingleMetric('ws_connections_total')?.get(),
+                    messageRate: await promClient.register.getSingleMetric('ws_message_rate')?.get()
+                }
+            };
         } catch (error) {
             health.websocket = {
                 status: 'unhealthy',
@@ -69,15 +85,38 @@ router.get('/detailed', async (req, res) => {
             };
         }
 
-        // Add cache health
+        // Add cache health with metrics
         try {
-            health.cache = cacheService.getHealth();
+            const cacheHealth = cacheService.getHealth();
+            health.cache = {
+                ...cacheHealth,
+                metrics: {
+                    hitRate: await promClient.register.getSingleMetric('cache_hit_rate')?.get(),
+                    size: await promClient.register.getSingleMetric('cache_size_bytes')?.get()
+                }
+            };
         } catch (error) {
             health.cache = {
                 status: 'unhealthy',
                 error: error.message
             };
         }
+
+        // Add historical data
+        const history = await cacheService.get('health_history') || [];
+        history.push({
+            timestamp: new Date().toISOString(),
+            status: health.status,
+            metrics: {
+                memory: health.server.memory,
+                uptime: health.server.uptime
+            }
+        });
+
+        // Keep last 24 hours
+        const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const filteredHistory = history.filter(h => new Date(h.timestamp) > dayAgo);
+        await cacheService.set('health_history', filteredHistory);
 
         // Calculate overall status
         const healthyServices = Object.values(health).filter(
@@ -92,6 +131,7 @@ router.get('/detailed', async (req, res) => {
             status: overallStatus,
             timestamp: new Date().toISOString(),
             services: health,
+            history: filteredHistory,
             summary: {
                 total: totalServices,
                 healthy: healthyServices,
