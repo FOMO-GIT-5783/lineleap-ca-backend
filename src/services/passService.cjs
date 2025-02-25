@@ -4,10 +4,11 @@ const Venue = require('../models/Venue.cjs');
 const { emitVenueUpdate } = require('../websocket/socketManager.cjs');
 const { PASS_EVENTS } = require('../utils/constants.cjs');
 const { MetricRecorder, CORE_METRIC_TYPES } = require('./MetricService.cjs');
+const createError = require('http-errors');
 
 class PassService {
     // Purchase new pass
-    static async purchasePass({ userId, venueId, passType, price }) {
+    static async purchasePass({ userId, venueId, passType, price, paymentIntentId, idempotencyKey }) {
         const startTime = Date.now();
         
         // Validate venue and pass availability
@@ -22,12 +23,10 @@ class PassService {
             venueId,
             type: passType,
             status: 'active',
-            purchasePrice: price,
+            purchaseAmount: price,
             purchaseDate: new Date(),
-            expiryDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours validity
-            redemptionStatus: {
-                isRedeemed: false
-            }
+            paymentIntentId,
+            idempotencyKey
         });
 
         // Track metrics
@@ -64,42 +63,6 @@ class PassService {
 
         // For Halifax V1, no blackout dates
         // Will be re-implemented in future phases if needed
-        return pass;
-    }
-
-    // Redeem pass
-    static async redeemPass(passId) {
-        const pass = await Pass.findById(passId);
-        if (!pass) {
-            throw new Error('Pass not found');
-        }
-
-        const metricService = new MetricRecorder();
-
-        if (pass.redemptionStatus.isRedeemed) {
-            throw new Error('Pass already redeemed');
-        }
-
-        pass.redemptionStatus = {
-            isRedeemed: true,
-            redeemedAt: new Date()
-        };
-        pass.status = 'redeemed';
-
-        await pass.save();
-
-        // Track manual verification ("I Am The Doorman" click)
-        await metricService.record(CORE_METRIC_TYPES.PASS.REDEMPTION, {
-            venueId: pass.venueId,
-            passType: pass.type // 'cover' or 'lineSkip'
-        });
-
-        // Emit real-time update
-        emitVenueUpdate(pass.venueId, 'passRedeemed', {
-            passId: pass._id,
-            timestamp: new Date()
-        });
-
         return pass;
     }
 
@@ -163,6 +126,124 @@ class PassService {
             ...data,
             status: PASS_EVENTS.PASS_CREATED
         });
+        return pass;
+    }
+
+    // Self-service pass verification
+    static async verifyPass(passId, userId) {
+        const pass = await Pass.findById(passId);
+        if (!pass) {
+            throw createError.notFound('Pass not found');
+        }
+
+        // Verify pass ownership
+        if (!pass.userId.equals(userId)) {
+            throw createError.authorization('Not authorized to verify this pass');
+        }
+
+        // Check if pass is active
+        if (pass.status !== 'active') {
+            throw createError.badRequest('Pass is not active');
+        }
+
+        // Check if pass is already used
+        if (pass.status === 'used') {
+            throw createError.badRequest('Pass has already been used');
+        }
+
+        // For drink passes, mark as used immediately
+        if (pass.type === 'drink') {
+            pass.status = 'used';
+        }
+
+        // For skipline/regular passes, check time window
+        if (['skipline', 'regular'].includes(pass.type)) {
+            const now = new Date();
+            if (now < pass.validFrom || now > pass.validUntil) {
+                throw createError.badRequest('Pass is not valid at this time');
+            }
+        }
+
+        // Update verification timestamp
+        pass.lastVerifiedAt = new Date();
+        await pass.save();
+
+        return pass;
+    }
+
+    // Get active passes for venue
+    static async getActivePasses(venueId) {
+        return Pass.find({
+            venueId,
+            status: 'active'
+        }).populate('userId', 'name email');
+    }
+
+    // Update pass status
+    static async updatePassStatus(passId, newStatus) {
+        const validStatuses = ['active', 'used', 'expired', 'cancelled'];
+        if (!validStatuses.includes(newStatus)) {
+            throw new Error('Invalid status');
+        }
+
+        const pass = await Pass.findByIdAndUpdate(
+            passId,
+            { 
+                status: newStatus,
+                ...(newStatus === 'used' ? {
+                    usedAt: new Date()
+                } : {})
+            },
+            { new: true }
+        );
+
+        if (!pass) {
+            throw new Error('Pass not found');
+        }
+
+        // Emit real-time update
+        emitVenueUpdate(pass.venueId, PASS_EVENTS.PASS_UPDATED, {
+            passId: pass._id,
+            status: newStatus
+        });
+
+        return pass;
+    }
+
+    // Use pass (no auth required - used directly on customer's phone)
+    static async usePass(passId, deviceId) {
+        const pass = await Pass.findById(passId);
+        if (!pass) {
+            throw createError.notFound('Pass not found');
+        }
+
+        // Use the pass with the new method
+        await pass.use(deviceId);
+
+        // Track metrics
+        const metricService = new MetricRecorder();
+        await metricService.record(
+            pass.type === 'drink' ? 
+                CORE_METRIC_TYPES.PASS.REDEMPTION :
+                CORE_METRIC_TYPES.PASS.VALIDATION,
+            {
+                venueId: pass.venueId,
+                passType: pass.type
+            }
+        );
+
+        // Emit real-time update
+        emitVenueUpdate(pass.venueId, 
+            pass.type === 'drink' ? 
+                PASS_EVENTS.PASS_USED :
+                PASS_EVENTS.PASS_VALIDATED,
+            {
+                passId: pass._id,
+                type: pass.type,
+                status: pass.status
+            }
+        );
+
         return pass;
     }
 }

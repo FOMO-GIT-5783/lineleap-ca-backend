@@ -11,9 +11,10 @@ const orderMetricsSchema = new mongoose.Schema({
         ref: 'Venue',
         required: true
     },
-    bartenderId: {
+    staffId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
+        ref: 'User',
+        sparse: true
     },
     eventType: {
         type: String,
@@ -81,9 +82,12 @@ const orderMetricsSchema = new mongoose.Schema({
     }
 });
 
-// Indexes for efficient querying
+// Define all indexes in one place
 orderMetricsSchema.index({ venueId: 1, timestamp: -1 });
-orderMetricsSchema.index({ bartenderId: 1, timestamp: -1 });
+orderMetricsSchema.index({ staffId: 1, timestamp: -1 });
 orderMetricsSchema.index({ orderId: 1, eventType: 1 });
+orderMetricsSchema.index({ timestamp: 1 });
+orderMetricsSchema.index({ eventType: 1 });
+orderMetricsSchema.index({ orderType: 1 });
 
 module.exports = mongoose.model('OrderMetrics', orderMetricsSchema); 

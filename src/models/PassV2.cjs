@@ -4,37 +4,29 @@ const passSchemaV2 = new mongoose.Schema({
     venueId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Venue',
-        required: true,
-        index: true
+        required: true
     },
     userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true,
-        index: true
+        required: true
     },
     type: {
         type: String,
         required: true,
-        enum: ['LineSkip', 'VIP', 'Premium', 'DrinkDeal', 'Other'],
-        index: true
+        enum: ['LineSkip', 'VIP', 'Premium', 'DrinkDeal', 'Other']
     },
     paymentIntentId: {
         type: String,
-        required: true,
-        unique: true
+        required: true
     },
     idempotencyKey: {
         type: String,
-        required: true,
-        unique: true,
-        index: true
+        required: true
     },
     transactionId: {
         type: String,
-        unique: true,
-        sparse: true,
-        index: true
+        sparse: true
     },
     purchaseAmount: {
         type: Number,
@@ -42,15 +34,13 @@ const passSchemaV2 = new mongoose.Schema({
     },
     purchaseDate: {
         type: Date,
-        required: true,
-        index: true
+        required: true
     },
     status: {
         type: String,
         required: true,
         enum: ['pending', 'active', 'redeemed', 'expired', 'cancelled', 'refunded'],
-        default: 'pending',
-        index: true
+        default: 'pending'
     },
     statusHistory: [{
         status: {
@@ -90,12 +80,15 @@ const passSchemaV2 = new mongoose.Schema({
     }]
 });
 
-// Indexes for common queries
+// Define all indexes in one place
+passSchemaV2.index({ venueId: 1 });
+passSchemaV2.index({ userId: 1 });
+passSchemaV2.index({ paymentIntentId: 1 }, { unique: true });
+passSchemaV2.index({ idempotencyKey: 1 }, { unique: true });
+passSchemaV2.index({ transactionId: 1 }, { unique: true, sparse: true });
 passSchemaV2.index({ venueId: 1, type: 1, status: 1 });
 passSchemaV2.index({ userId: 1, status: 1 });
 passSchemaV2.index({ purchaseDate: 1, status: 1 });
-passSchemaV2.index({ idempotencyKey: 1 }, { unique: true });
-passSchemaV2.index({ 'statusHistory.status': 1, 'statusHistory.timestamp': -1 });
 
 // Virtual for pass age
 passSchemaV2.virtual('age').get(function() {

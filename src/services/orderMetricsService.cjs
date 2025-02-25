@@ -55,20 +55,15 @@ class OrderMetricsService {
 
     // Track verification
     static async trackVerification(order, success) {
-        const processingTime = order.completedAt 
-            ? order.completedAt - order.createdAt 
-            : Date.now() - order.createdAt;
-
         return OrderMetrics.create({
             orderId: order._id,
             venueId: order.venueId,
             userId: order.userId,
             eventType: 'verification',
             orderType: 'drink',
-            processingTime,
             metadata: {
                 success,
-                verifiedBy: order.bartenderVerification?.bartenderId
+                verifiedBy: order.staffVerification?.staffId
             }
         });
     }

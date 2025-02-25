@@ -26,12 +26,11 @@ class EventBus extends EventEmitter {
     }
 
     // Verification Events
-    emitVerificationNeeded(orderId, bartenderId, code) {
-        this.emit('verificationNeeded', { 
-            orderId, 
-            bartenderId, 
-            verificationCode: code,
-            timestamp: new Date()
+    emitVerificationNeeded(orderId, staffId, code) {
+        this.emit('verificationNeeded', {
+            orderId,
+            staffId,
+            code
         });
     }
 

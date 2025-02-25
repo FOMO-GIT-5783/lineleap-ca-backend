@@ -4,31 +4,23 @@ const passSchema = new mongoose.Schema({
     venueId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Venue',
-        required: true,
-        index: true
+        required: true
     },
     userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true,
-        index: true
+        required: true
     },
     type: {
         type: String,
         required: true,
-        enum: ['LineSkip', 'VIP', 'Premium', 'DrinkDeal', 'Other'],
-        index: true
+        enum: ['drink', 'skipline']
     },
-    paymentIntentId: {
+    status: {
         type: String,
         required: true,
-        unique: true
-    },
-    idempotencyKey: {
-        type: String,
-        required: true,
-        unique: true,
-        index: true
+        enum: ['active', 'used', 'expired', 'cancelled'],
+        default: 'active'
     },
     purchaseAmount: {
         type: Number,
@@ -36,50 +28,50 @@ const passSchema = new mongoose.Schema({
     },
     purchaseDate: {
         type: Date,
-        required: true,
-        index: true
+        required: true
     },
-    status: {
+    paymentIntentId: {
         type: String,
-        required: true,
-        enum: ['active', 'redeemed', 'expired', 'cancelled'],
-        default: 'active',
-        index: true
+        required: true
     },
+    idempotencyKey: {
+        type: String,
+        required: true
+    },
+    // Simplified usage tracking
+    usedAt: Date,
+    lastUsedDeviceId: String,
+    
+    // Keep status history for analytics
     statusHistory: [{
         status: {
             type: String,
             required: true,
-            enum: ['active', 'redeemed', 'expired', 'cancelled']
+            enum: ['active', 'used', 'expired', 'cancelled']
         },
         timestamp: {
             type: Date,
             required: true
-        },
-        updatedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
         }
     }],
-    redemptionStatus: {
-        redeemedAt: Date,
-        redeemedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
-        },
-        location: String
-    },
+    
+    // Keep custom answers for future use
     customAnswers: [{
         question: String,
         answer: String
     }]
+}, {
+    timestamps: true
 });
 
-// Indexes for common queries
-passSchema.index({ venueId: 1, type: 1, status: 1 });
-passSchema.index({ userId: 1, status: 1 });
-passSchema.index({ purchaseDate: 1, status: 1 });
+// Define all indexes in one place
+passSchema.index({ venueId: 1 });
+passSchema.index({ userId: 1 });
+passSchema.index({ paymentIntentId: 1 }, { unique: true });
 passSchema.index({ idempotencyKey: 1 }, { unique: true });
+passSchema.index({ venueId: 1, type: 1, status: 1 }); // Combined index for venue pass management
+passSchema.index({ userId: 1, status: 1 }); // Combined index for user pass management
+passSchema.index({ purchaseDate: 1, status: 1 }); // Combined index for pass expiration
 
 // Virtual for pass age
 passSchema.virtual('age').get(function() {
@@ -91,25 +83,32 @@ passSchema.methods.isValid = function() {
     return this.status === 'active';
 };
 
-// Method to redeem pass
-passSchema.methods.redeem = async function(redeemedBy, location) {
+// Updated method to use pass
+passSchema.methods.use = async function(deviceId) {
     if (!this.isValid()) {
-        throw new Error('Pass is not valid for redemption');
+        throw new Error('Pass is not valid for use');
     }
 
-    this.status = 'redeemed';
+    const now = new Date();
+    
+    // For drink passes, mark as used
+    if (this.type === 'drink') {
+        this.status = 'used';
+        this.usedAt = now;
+    }
+    
+    // For skipline passes, just update lastUsed
+    if (this.type === 'skipline') {
+        this.lastUsedDeviceId = deviceId;
+    }
+    
     this.statusHistory.push({
-        status: 'redeemed',
-        timestamp: new Date(),
-        updatedBy: redeemedBy
+        status: this.status,
+        timestamp: now
     });
-    this.redemptionStatus = {
-        redeemedAt: new Date(),
-        redeemedBy,
-        location
-    };
 
     await this.save();
+    return this;
 };
 
 // Static method to get active passes for a venue
@@ -129,11 +128,11 @@ passSchema.statics.getDailyCount = async function(venueId, type) {
         venueId,
         type,
         purchaseDate: { $gte: startOfDay },
-        status: { $in: ['active', 'redeemed'] }
+        status: { $in: ['active', 'used'] }
     });
 };
 
-// Create model if it doesn't exist
+// Create model
 const Pass = mongoose.models.Pass || mongoose.model('Pass', passSchema);
 
 module.exports = Pass; 

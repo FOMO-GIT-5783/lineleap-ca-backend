@@ -20,7 +20,9 @@ const drinkCategorySchema = new mongoose.Schema({
     }
 });
 
-// Add index for quick sorting
+// Define all indexes in one place
+drinkCategorySchema.index({ venueId: 1 });
+drinkCategorySchema.index({ sortOrder: 1 });
 drinkCategorySchema.index({ venueId: 1, sortOrder: 1 });
 
 // Handle model recompilation

@@ -28,8 +28,7 @@ const menuItemSchema = new mongoose.Schema({
     venueId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Venue',
-        required: true,
-        index: true
+        required: true
     },
     name: { type: String, required: true },
     price: { type: Number, required: true },
@@ -75,7 +74,8 @@ const menuItemSchema = new mongoose.Schema({
     }
 });
 
-// Index for menu operations only
+// Define all indexes in one place
+menuItemSchema.index({ venueId: 1 });
 menuItemSchema.index({ name: 1, venueId: 1 }, { unique: true });
 menuItemSchema.index({ name: 1, venueId: 1, category: 1 }, { unique: true });
 

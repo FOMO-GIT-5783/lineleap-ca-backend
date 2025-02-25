@@ -10,12 +10,11 @@ const metricSchema = new mongoose.Schema({
     venueId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Venue',
-        index: true // Nightlife venues query by ID frequently
+        required: true
     },
     value: Number,
     timestamp: {
         type: Date,
-        index: true,
         default: Date.now
     },
     context: {
@@ -24,7 +23,9 @@ const metricSchema = new mongoose.Schema({
     }
 });
 
-// Compound index for common nightlife queries
+// Define all indexes in one place
+metricSchema.index({ venueId: 1 });
+metricSchema.index({ timestamp: 1 });
 metricSchema.index({ venueId: 1, type: 1, timestamp: -1 });
 
 // Add index verification on model compilation

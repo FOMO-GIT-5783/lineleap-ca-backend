@@ -14,9 +14,9 @@ const ORDER_EVENTS = {
 const PASS_EVENTS = {
     PASS_CREATED: 'passCreated',
     PASS_VALIDATED: 'passValidated',
-    PASS_REDEEMED: 'passRedeemed',
+    PASS_USED: 'passUsed',
     PASS_EXPIRED: 'passExpired',
-    PASS_AVAILABILITY_UPDATED: 'passAvailabilityUpdated'
+    PASS_UPDATED: 'passUpdated'
 };
 
 // Venue types
@@ -39,11 +39,17 @@ const MUSIC_TYPES = [
 
 // Pass types
 const PASS_TYPES = [
-    'LineSkip',
-    'VIP',
-    'Premium',
-    'DrinkDeal'
+    'drink',
+    'skipline'
 ];
+
+// Pass statuses
+const PASS_STATUS = {
+    ACTIVE: 'active',
+    USED: 'used',
+    EXPIRED: 'expired',
+    CANCELLED: 'cancelled'
+};
 
 // Days of week
 const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -57,18 +63,27 @@ const SCHEDULE_TYPES = [
 ];
 
 // User roles
-const USER_ROLES = [
-    'customer',
-    'bartender',
-    'owner',
-    'admin'
-];
+const USER_ROLES = {
+    CUSTOMER: 'customer',
+    OWNER: 'owner',
+    ADMIN: 'admin'
+};
 
 // Order types
 const ORDER_TYPES = [
     'drink',
     'pass'
 ];
+
+// Error codes
+const ERROR_CODES = {
+    PASS_NOT_FOUND: 'PASS_NOT_FOUND',
+    PASS_ALREADY_USED: 'PASS_ALREADY_USED',
+    PASS_EXPIRED: 'PASS_EXPIRED',
+    PASS_USE_ERROR: 'PASS_USE_ERROR',
+    UNAUTHORIZED: 'UNAUTHORIZED',
+    MISSING_REQUIRED_FIELD: 'MISSING_REQUIRED_FIELD'
+};
 
 // Payment status
 const PAYMENT_STATUS = {
@@ -101,7 +116,6 @@ const DATE_FORMATS = {
 // API rate limits (requests per minute)
 const RATE_LIMITS = {
     AUTH: 300,      // Auth operations
-    LOGIN: 50,      // Login attempts
     API: 500,       // General API
     PAYMENT: 100    // Payment operations
 };
@@ -127,15 +141,10 @@ const WS_EVENTS = {
     LEAVE_VENUE: 'leaveVenue',
     VENUE_UPDATE: 'venueUpdate',
 
-    // Order events
-    ORDER_CREATED: 'orderCreated',
-    ORDER_UPDATED: 'orderUpdated',
-    ORDER_CANCELLED: 'orderCancelled',
-
     // Pass events
     PASS_CREATED: 'passCreated',
     PASS_UPDATED: 'passUpdated',
-    PASS_REDEEMED: 'passRedeemed',
+    PASS_USED: 'passUsed',
 
     // Dashboard events
     DASHBOARD_UPDATE: 'dashboardUpdate',
@@ -149,12 +158,13 @@ module.exports = {
     VENUE_TYPES,
     MUSIC_TYPES,
     PASS_TYPES,
+    PASS_STATUS,
     DAYS_SHORT,
     DAYS_FULL,
     SCHEDULE_TYPES,
     USER_ROLES,
     ORDER_TYPES,
-    PAYMENT_STATUS,
+    ERROR_CODES,
     SERVICE_FEE_TYPES,
     TIME_FORMATS,
     DATE_FORMATS,

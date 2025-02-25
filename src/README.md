@@ -1,174 +1,223 @@
-# LineLeap Backend
+# FOMO API Service
 
-A robust Node.js/Express backend service for the LineLeap nightlife platform, featuring real-time venue monitoring, pass management, and payment processing.
+A robust, microservice-oriented backend API for the FOMO application, handling payments, authentication, and real-time communication.
 
-## Features
+## System Requirements
 
-- 🔐 **Authentication & Authorization**
-  - Auth0 integration
-  - Role-based access control
-  - Token refresh mechanism
-  - Rate limiting
+- **Node.js**: v18.x or newer (v20+ recommended)
+- **npm**: v8.x or newer
+- **MongoDB**: Atlas cluster or local MongoDB v5.0+
+- **Stripe Account**: Test mode with API keys
+- **Auth0 Account**: With properly configured application
+- **Environment**: MacOS, Linux, or Windows with WSL
 
-- 🎫 **Pass Management**
-  - Digital pass creation and validation
-  - QR code generation
-  - Real-time pass status tracking
-  - Pass redemption system
+## ⚙️ Environment Setup
 
-- 💳 **Payment Processing**
-  - Secure Stripe integration
-  - Idempotent transactions
-  - Payment verification
-  - Refund handling
+### Required Environment Variables
 
-- 🔄 **Real-time WebSocket System**
-  - Live venue monitoring
-  - Automatic optimization
-  - Connection management
-  - Session tracking
+Create a `.env.development` file in the `/src` directory with the following variables:
 
-- 📊 **Health Monitoring**
-  - Comprehensive health checks
-  - Service status monitoring
-  - Performance metrics
-  - Circuit breaker implementation
+```
+# Server Configuration
+PORT=3001
+NODE_ENV=development
+LOG_LEVEL=debug
 
-## Getting Started
+# MongoDB Connection
+MONGODB_URI=mongodb+srv://your-mongodb-connection-string
+DB_NAME=fomo-db
 
-### Prerequisites
+# Auth0 Configuration
+AUTH0_ISSUER_BASE_URL=https://your-tenant.auth0.com
+AUTH0_AUDIENCE=https://api.yourapp.com
+AUTH0_CLIENT_ID=your-auth0-client-id
+AUTH0_CLIENT_SECRET=your-auth0-client-secret
 
-- Node.js (v18+)
-- MongoDB
-- Redis (optional)
-- Stripe Account
+# Stripe Configuration
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=whsec_your_stripe_webhook_secret
+STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
 
-### Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/your-repo/lineleap-backend.git
-cd lineleap-backend
+# Feature Flags
+ENABLE_WEBSOCKETS=true
+ENABLE_CACHE=true
+ENABLE_MONITORING=true
+ENABLE_AUTH_DEBUGGING=true  # Only for development!
 ```
 
-2. Install dependencies:
-```bash
-npm install
-```
+## 🚀 Installation & Setup
 
-3. Set up environment variables:
-```bash
-cp .env.example .env.development
-# Edit .env.development with your configuration
-```
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/your-org/fomo-fullstack.git
+   cd fomo-fullstack
+   ```
 
-4. Start the server:
+2. **Install dependencies**:
+   ```bash
+   cd apps/api
+   npm install
+   ```
+
+3. **Setup environment variables**:
+   - Copy `.env.example` to `.env.development` if it exists
+   - Otherwise create a new `.env.development` file in the `/src` directory
+   - Fill in all required environment variables as listed above
+
+4. **Verify MongoDB Connection**:
+   ```bash
+   # Test your MongoDB connection string
+   npx mongodb-connection-checker <your-connection-string>
+   ```
+
+## 🏃‍♂️ Running the Application
+
+### Development Mode
+
 ```bash
+cd apps/api
 npm run dev
 ```
 
-### Environment Variables
+This will start a development server with nodemon for hot reloading.
 
-Required environment variables:
-```
-# Auth0 Configuration
-AUTH0_CLIENT_ID=your_client_id
-AUTH0_CLIENT_SECRET=your_client_secret
-AUTH0_ISSUER_BASE_URL=your_auth0_domain
-AUTH0_AUDIENCE=your_api_identifier
+### Production Mode
 
-# Database Configuration
-MONGODB_URI=your_mongodb_uri
-
-# Stripe Configuration
-STRIPE_SECRET_KEY=your_stripe_secret_key
-STRIPE_WEBHOOK_SECRET=your_webhook_secret
-```
-
-## API Documentation
-
-### Health Endpoints
-
-- `GET /health` - Basic health check
-- `GET /health/detailed` - Detailed system health
-- `GET /health/websocket` - WebSocket system status
-- `GET /health/database` - Database health check
-
-### Authentication
-
-- `POST /api/auth/login` - User login
-- `POST /api/auth/callback` - Auth0 callback
-- `GET /api/auth/health` - Auth service status
-
-### Pass Management
-
-- `GET /api/passes/my-passes` - Get user's passes
-- `POST /api/passes/purchase` - Purchase new pass
-- `POST /api/passes/:passId/validate` - Validate pass
-- `POST /api/passes/:passId/redeem` - Redeem pass
-
-### Venue Management
-
-- `GET /api/venues` - List venues
-- `GET /api/venues/:venueId/metrics` - Get venue metrics
-- `GET /api/venues/:venueId/passes` - Get venue passes
-
-## Architecture
-
-The system follows a service-oriented architecture with:
-- Service container for dependency injection
-- Event-driven communication
-- Circuit breaker pattern
-- Rate limiting and optimization
-- Real-time WebSocket monitoring
-
-## Development
-
-### Running Tests
 ```bash
-npm test                 # Run all tests
-npm run test:smoke      # Run smoke tests
-npm run test:payments   # Run payment tests
-```
-
-### Code Style
-The project uses ESLint for code style. Run linting:
-```bash
-npm run lint
-```
-
-### Monitoring
-Monitor service health:
-```bash
-npm run monitor:health
-```
-
-## Production Deployment
-
-1. Set up environment:
-```bash
-cp .env.example .env.production
-# Configure production environment variables
-```
-
-2. Build and start:
-```bash
+cd apps/api
 npm run build
 npm start
 ```
 
-## Contributing
+## 🔍 Health Checks & Monitoring
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+### Available Health Endpoints
 
-## License
+- **Basic Health**: `GET /health`
+- **Detailed Health**: `GET /health/detailed`
+- **Database Health**: `GET /health/database`
+- **Payment Health**: `GET /health/payment`
+- **WebSocket Health**: `GET /health/websocket`
 
-This project is proprietary and confidential.
+Example:
+```bash
+curl http://localhost:3001/health/detailed
+```
 
-## Support
+## 🧩 API Services
 
-For support, email support@lineleap.com or join our Slack channel. 
+The API includes the following core services:
+
+### Authentication Service
+- Auth0 integration for secure user authentication
+- Token validation and permission checking
+- User profile management
+
+### Payment Processor
+- Stripe integration for payment processing
+- Handles payment intents, confirmations, and captures
+- Integrated with the transaction system for atomicity
+
+### WebSocket Service
+- Real-time communication
+- Venue session management
+- Events broadcasting
+
+### Database Service
+- MongoDB connection pooling
+- Schema validation
+- Transactional support
+
+### Caching Service
+- Local memory cache
+- Optional Redis support
+- Performance optimization
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+1. **Stripe Connection Issues**
+   - Verify your Stripe API keys are correct
+   - Ensure your Stripe account is in test mode for development
+   - Check if your account has any verification requirements
+   - Run the Stripe functional test script to verify core functionality:
+     ```bash
+     node src/stripe-functional-test.cjs
+     ```
+
+2. **MongoDB Connection Issues**
+   - Check network access settings in MongoDB Atlas
+   - Verify IP allowlist includes your development machine
+   - Ensure username/password in connection string are correct
+
+3. **Auth0 Integration Issues**
+   - Verify Auth0 application settings
+   - Check redirect URIs and allowed origins
+   - Ensure correct scopes are configured
+
+4. **Node.js Version Compatibility**
+   - Use `nvm` to install and use the required Node.js version:
+     ```bash
+     nvm install 20
+     nvm use 20
+     ```
+
+## 📊 Logs and Diagnostics
+
+Logs are stored in various locations depending on the environment:
+
+- **Development**: Console output
+- **Production**: `logs/app.log` with daily rotation
+
+View recent logs:
+```bash
+# Last 50 lines from application log
+tail -n 50 logs/app.log
+
+# Follow logs in real-time
+tail -f logs/app.log
+```
+
+## 🛡️ Security Considerations
+
+1. **Environment Variables**
+   - Never commit `.env` files to version control
+   - Rotate credentials regularly
+   - Use separate credentials for development and production
+
+2. **Stripe Integration**
+   - Always use test mode for development
+   - Follow Stripe best practices for handling payments
+   - Implement proper idempotency for payment operations
+
+3. **Auth0 Security**
+   - Regularly audit permissions and scopes
+   - Never expose client secrets in frontend code
+   - Use Auth0 rules for additional security checks
+
+## 🌐 API Documentation
+
+API documentation is available at:
+- Development: `http://localhost:3001/docs`
+- Production: `https://api.yourapp.com/docs`
+
+## 🧪 Testing
+
+Run tests with:
+```bash
+npm test               # Run all tests
+npm run test:unit      # Run unit tests only
+npm run test:integration # Run integration tests only
+```
+
+## 🤝 Contributing
+
+1. Create a feature branch from `develop`
+2. Make your changes
+3. Run tests and ensure they pass
+4. Submit a pull request
+
+## 📝 License
+
+This project is licensed under the [MIT License](LICENSE). 

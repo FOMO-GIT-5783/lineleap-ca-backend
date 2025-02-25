@@ -51,26 +51,33 @@ const orderSchema = new mongoose.Schema({
         createdAt: { type: Date, default: Date.now },
         type: { type: String, enum: ['system', 'user'] }
     }],
-    reference: { type: String, unique: true },
-    createdAt: { type: Date, default: Date.now },
+    reference: { 
+        type: String, 
+        unique: true
+    },
+    createdAt: { 
+        type: Date, 
+        default: Date.now
+    },
     completedAt: Date,
-    // New payment processing fields
     idempotencyKey: {
         type: String,
         unique: true,
-        sparse: true,
-        index: true
+        sparse: true
     },
     transactionId: {
         type: String,
         unique: true,
-        sparse: true,
-        index: true
+        sparse: true
     },
     metadata: {
         type: Map,
         of: mongoose.Schema.Types.Mixed
     }
+}, {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
 });
 
 // Virtual for order age
@@ -96,16 +103,15 @@ orderSchema.methods.addStatusHistory = function(status) {
     }
 };
 
-// Indexes
+// Consolidated indexes for common queries
+orderSchema.index({ reference: 1 }, { unique: true });
+orderSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
+orderSchema.index({ transactionId: 1 }, { unique: true, sparse: true });
+orderSchema.index({ createdAt: 1 });
 orderSchema.index({ venueId: 1, createdAt: -1 });
 orderSchema.index({ userId: 1, createdAt: -1 });
-orderSchema.index({ reference: 1 }, { unique: true });
 orderSchema.index({ status: 1 });
-
-// Compound index for common nightlife queries (venue + status + date)
 orderSchema.index({ venueId: 1, status: 1, createdAt: -1 });
-
-// Add index for payment processing
 orderSchema.index({ 'statusHistory.status': 1, 'statusHistory.timestamp': -1 });
 
 module.exports = mongoose.model('Order', orderSchema);

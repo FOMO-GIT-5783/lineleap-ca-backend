@@ -16,12 +16,15 @@ const getConnectionState = () => {
 
 const connectDB = async () => {
     const options = {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
         maxPoolSize: 10,
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
-        family: 4
+        family: 4,
+        retryWrites: true,
+        w: 'majority',
+        appName: 'FOMO-API',
+        connectTimeoutMS: 30000,
+        heartbeatFrequencyMS: 10000
     };
 
     try {

@@ -184,7 +184,7 @@ const passConfigSchema = new mongoose.Schema({
     instructions: {
         type: String,
         required: true,
-        default: "Show this pass to the bartender. The bartender will redeem the pass."
+        default: "Show this pass to the venue staff. They will verify and redeem the pass."
     },
     warning: {
         type: String,
@@ -212,8 +212,7 @@ const venueSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
-    trim: true,
-    index: true 
+    trim: true
   },
   type: {
     type: String,
@@ -248,134 +247,73 @@ const venueSchema = new mongoose.Schema({
     default: false
   },
   highlights: [{
-    type: String  // URLs for highlight images
+    type: String
   }],
   location: {
-    address: {
+    type: {
       type: String,
-      required: true
+      enum: ['Point'],
+      default: 'Point'
     },
-    city: {
-      type: String,
-      required: true
-    },
-    province: {
-      type: String,
-      required: true
-    },
-    postalCode: {
-      type: String,
+    coordinates: {
+      type: [Number],
       required: true
     }
   },
-  operatingHours: {
-    open: {
-      type: String,
-      required: true,
-      default: '22:00'
-    },
-    close: {
-      type: String,
-      required: true,
-      default: '02:00'
-    },
-    daysOpen: [{
-      type: String,
-      enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-    }]
+  address: {
+    street: String,
+    city: String,
+    state: String,
+    zip: String
   },
-  trendingScore: {
-    type: Number,
-    default: 0
-  },
-  checkInHistory: [{
-    count: Number,
-    timestamp: Date
+  hours: [{
+    day: {
+      type: String,
+      enum: DAYS_SHORT,
+      required: true
+    },
+    open: String,
+    close: String,
+    closed: {
+      type: Boolean,
+      default: false
+    }
   }],
   ordering: venueOrderingSchema,
   happyHour: happyHourSchema,
   pricing: pricingSchema,
   drinkOrdering: drinkOrderingSchema,
-  blackoutDates: [{
-    type: Date
-  }],
-  passSettings: {
-    allowMultiplePasses: {
-      type: Boolean,
-      default: false
+  metrics: {
+    avgWaitTime: { type: Number, default: 0 },
+    peakHours: [String],
+    popularity: { type: Number, default: 0 }
+  },
+  settings: {
+    notifications: {
+      orderUpdates: { type: Boolean, default: true },
+      promotions: { type: Boolean, default: true }
     },
-    requireAdvanceBooking: {
-      type: Boolean,
-      default: false
-    },
-    minAdvanceHours: {
-      type: Number,
-      default: 0
-    },
-    maxAdvanceDays: {
-      type: Number,
-      default: 7
-    },
-    autoExpireHours: {
-      type: Number,
-      default: 24
-    }
+    autoAcceptOrders: { type: Boolean, default: false },
+    requireAge: { type: Boolean, default: true },
+    minAge: { type: Number, default: 21 }
   }
 }, {
-  timestamps: true,
-  indexes: [
-    { 'location.city': 1 },
-    { trendingScore: -1 },
-    { 'passes.available': 1 }
-  ],
-  version: { type: Number, default: 0 } 
+  timestamps: true
 });
 
-// Add method to check pass availability
-venueSchema.methods.isPassAvailable = function(passType, date = new Date()) {
-    const pass = this.passes.find(p => p.type === passType);
-    if (!pass || !pass.isAvailable) return false;
+// Define all indexes in one place
+venueSchema.index({ name: 1 });
+venueSchema.index({ type: 1 });
+venueSchema.index({ music: 1 });
+venueSchema.index({ trending: 1 });
+venueSchema.index({ likeCount: -1 });
+venueSchema.index({ location: '2dsphere' });
+venueSchema.index({ 'hours.day': 1 });
+venueSchema.index({ 'metrics.popularity': -1 });
 
-    // Check blackout dates
-    const isBlackout = this.blackoutDates.some(blackoutDate => 
-        blackoutDate.getFullYear() === date.getFullYear() &&
-        blackoutDate.getMonth() === date.getMonth() &&
-        blackoutDate.getDate() === date.getDate()
-    );
-    if (isBlackout) return false;
+const Venue = mongoose.model('Venue', venueSchema);
 
-    return true;
-};
-
-// Add method to get pass price
-venueSchema.methods.getPassPrice = function(passType) {
-    const pass = this.passes.find(p => p.type === passType);
-    return pass ? pass.price : null;
-};
-
-// Add method to update pass schedule
-venueSchema.methods.updatePassSchedule = function(passId, scheduleData) {
-    const pass = this.passes.id(passId);
-    if (!pass) throw new Error('Pass not found');
-    
-    pass.schedule = scheduleData;
-    return this.save();
-};
-
-// Add method to manage blackout dates
-venueSchema.methods.manageBlackoutDates = function(dates, operation = 'add') {
-    if (operation === 'add') {
-        this.blackoutDates.push(...dates);
-    } else if (operation === 'remove') {
-        this.blackoutDates = this.blackoutDates.filter(date => 
-            !dates.some(d => d.getTime() === date.getTime())
-        );
-    }
-    return this.save();
-};
-
-module.exports = mongoose.model('Venue', venueSchema);
-DAYS_SHORT 
+module.exports = Venue;
 
 
 

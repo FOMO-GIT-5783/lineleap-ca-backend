@@ -414,6 +414,31 @@ function handlePassEvents(socket, user) {
     });
 }
 
+// Update verification data structure
+const handleVerification = async (socket, data) => {
+    const { orderId, venueId, deviceId } = data;
+    
+    try {
+        // Emit verification event
+        socket.to(venueId).emit('verification_complete', {
+            orderId,
+            timestamp: new Date(),
+            deviceId
+        });
+        
+        return { success: true };
+    } catch (error) {
+        logger.error('Verification event error:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+// Remove bartender-specific event handlers
+const eventHandlers = {
+    'verification': handleVerification,
+    // ... keep other existing handlers ...
+};
+
 module.exports = {
     initializeSocket,
     userPresence,

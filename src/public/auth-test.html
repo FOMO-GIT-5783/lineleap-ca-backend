@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auth0 Login Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; line-height: 1.6; }
+        button { margin: 10px 0; padding: 10px 15px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; }
+        .login-btn { background-color: #4CAF50; color: white; }
+        .dashboard-btn { background-color: #2196F3; color: white; }
+        .logout-btn { background-color: #f44336; color: white; }
+        .error { color: red; font-weight: bold; padding: 10px; background-color: #ffebee; border-radius: 4px; }
+        .success { color: green; font-weight: bold; padding: 10px; background-color: #e8f5e9; border-radius: 4px; }
+        #status { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background-color: #f9f9f9; }
+        .user-info { background-color: #f5f5f5; padding: 15px; border-radius: 4px; margin-top: 20px; overflow-x: auto; white-space: pre; }
+        .hidden { display: none; }
+        .container { display: flex; flex-direction: column; gap: 15px; }
+        .card { box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        h1, h2 { color: #333; }
+        .health-card { background-color: #e3f2fd; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>FOMO Authentication Test</h1>
+            
+            <div id="login-section">
+                <p>Use the buttons below to test authentication:</p>
+                <button id="loginButton" class="login-btn">Login with Auth0</button>
+                <p><small>This will authenticate you with Auth0 and set secure HTTP-only cookies.</small></p>
+            </div>
+            
+            <div id="authenticated-section" class="hidden">
+                <h2>Authentication Success!</h2>
+                <p>You are now authenticated. Your session is active and secure.</p>
+                <button id="checkStatusButton" class="dashboard-btn">Check Auth Status</button>
+                <button id="logoutButton" class="logout-btn">Logout</button>
+            </div>
+            
+            <div id="status">Status: Ready to test authentication</div>
+        </div>
+        
+        <div id="user-section" class="card hidden">
+            <h2>User Information</h2>
+            <pre id="user-info" class="user-info">Not logged in</pre>
+        </div>
+        
+        <div id="health-section" class="card health-card">
+            <h2>Health Checks</h2>
+            <p>These health checks will open in a new tab to avoid losing your authentication context.</p>
+            <div>
+                <button id="detailedHealthButton" class="dashboard-btn">Check Detailed Health</button>
+                <button id="paymentHealthButton" class="dashboard-btn">Check Payment Health</button>
+                <button id="healthDashboardButton" class="dashboard-btn">Open Health Dashboard</button>
+            </div>
+            <div id="health-status" class="user-info hidden">No health data</div>
+        </div>
+        
+        <div class="card">
+            <h2>Health Monitoring Access</h2>
+            <p>The health dashboard can be accessed directly at any time using these links:</p>
+            <ul>
+                <li><a href="/health-dashboard.html" target="_blank">Complete Health Dashboard</a> - View all system components</li>
+                <li><a href="/health/detailed" target="_blank">Detailed Health JSON</a> - Raw health data for all components</li>
+                <li><a href="/health/payment" target="_blank">Payment Health JSON</a> - Raw payment system health data</li>
+            </ul>
+            <p><strong>Note:</strong> These health endpoints are public and don't require authentication.</p>
+        </div>
+        
+        <div class="card">
+            <h2>Debug</h2>
+            <button id="debugTokenButton" class="dashboard-btn">Debug Token</button>
+            <pre id="debug-info" class="user-info hidden">No debug data</pre>
+        </div>
+    </div>
+    
+    <script>
+        // On page load, check if we're already authenticated
+        document.addEventListener('DOMContentLoaded', function() {
+            // Setup event listeners for all buttons
+            document.getElementById('loginButton').addEventListener('click', loginWithoutAudience);
+            document.getElementById('checkStatusButton').addEventListener('click', checkAuthStatus);
+            document.getElementById('logoutButton').addEventListener('click', logoutUser);
+            document.getElementById('detailedHealthButton').addEventListener('click', function() {
+                window.open('/health/detailed', '_blank');
+            });
+            document.getElementById('paymentHealthButton').addEventListener('click', function() {
+                window.open('/health/payment', '_blank');
+            });
+            document.getElementById('healthDashboardButton').addEventListener('click', function() {
+                window.open('/health-dashboard.html', '_blank');
+            });
+            document.getElementById('debugTokenButton').addEventListener('click', function() {
+                debugToken();
+            });
+            
+            // Check if there's an error message in the URL
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('error')) {
+                showStatus('Authentication error: ' + urlParams.get('error'), true);
+            }
+            
+            // Always check authentication status on page load
+            checkAuthStatus();
+            
+            // Clean up URL parameters to avoid showing error again on page refresh
+            if (window.history && window.history.replaceState && urlParams.has('error')) {
+                const cleanUrl = window.location.pathname;
+                window.history.replaceState({}, document.title, cleanUrl);
+            }
+        });
+
+        // Display status messages
+        function showStatus(message, isError) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = "Status: " + message;
+            statusDiv.className = isError ? 'error' : 'success';
+            console.log(isError ? 'ERROR: ' : 'INFO: ', message);
+        }
+
+        function loginWithoutAudience() {
+            try {
+                showStatus('Authenticating with Auth0...', false);
+                
+                const params = new URLSearchParams({
+                    response_type: 'code',
+                    client_id: 'jlswjqk7PGxbQTyGG37oo7PysEskf6O7',
+                    redirect_uri: 'http://localhost:3001/api/auth/callback',
+                    scope: 'openid profile email'
+                    // No audience parameter
+                });
+                
+                // Log to console for debugging
+                console.log('Redirecting to Auth0...');
+                console.log(`URL: https://dev-vcxivfkv8x4robxr.us.auth0.com/authorize?${params.toString()}`);
+                
+                // Redirect to Auth0
+                window.location.href = `https://dev-vcxivfkv8x4robxr.us.auth0.com/authorize?${params.toString()}`;
+            } catch (error) {
+                showStatus('Error during authentication: ' + error.message, true);
+                console.error('Authentication error:', error);
+            }
+        }
+        
+        // Check if we're authenticated 
+        function checkAuthStatus() {
+            fetch('/api/auth/status', {
+                method: 'GET',
+                credentials: 'include', // Important: include cookies with the request
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Auth status:', data);
+                
+                if (data.status === 'authenticated' || 
+                   (data.status === 'success' && data.data && data.data.authenticated)) {
+                    // We're authenticated!
+                    showStatus('Authenticated successfully!', false);
+                    
+                    // Show authenticated section and hide login section
+                    document.getElementById('login-section').classList.add('hidden');
+                    document.getElementById('authenticated-section').classList.remove('hidden');
+                    
+                    // Display user info
+                    document.getElementById('user-section').classList.remove('hidden');
+                    const userInfoElement = document.getElementById('user-info');
+                    
+                    // Handle both response formats (direct user or nested in data)
+                    const user = data.data ? data.data.user : data.user;
+                    userInfoElement.textContent = JSON.stringify(user, null, 2);
+                } else {
+                    // Not authenticated
+                    showStatus('Not authenticated. Please log in.', false);
+                    
+                    // Show login section and hide authenticated section
+                    document.getElementById('login-section').classList.remove('hidden');
+                    document.getElementById('authenticated-section').classList.add('hidden');
+                    document.getElementById('user-section').classList.add('hidden');
+                }
+            })
+            .catch(error => {
+                console.error('Error checking auth status:', error);
+                showStatus('Error checking authentication status. You may need to log in again.', true);
+                
+                // Show login section as fallback
+                document.getElementById('login-section').classList.remove('hidden');
+                document.getElementById('authenticated-section').classList.add('hidden');
+                document.getElementById('user-section').classList.add('hidden');
+            });
+        }
+        
+        function logoutUser() {
+            fetch('/api/auth/logout', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Logout response:', data);
+                showStatus('Logged out successfully', false);
+                
+                // Show login section
+                document.getElementById('login-section').classList.remove('hidden');
+                document.getElementById('authenticated-section').classList.add('hidden');
+                document.getElementById('user-section').classList.add('hidden');
+                
+                // Clear user info
+                document.getElementById('user-info').textContent = 'Not logged in';
+            })
+            .catch(error => {
+                console.error('Error during logout:', error);
+                showStatus('Error during logout: ' + error.message, true);
+            });
+        }
+        
+        function checkHealth(type) {
+            const endpoint = `/health/${type}`;
+            showStatus(`Checking ${type} health...`, false);
+            
+            fetch(endpoint)
+            .then(response => response.json())
+            .then(data => {
+                console.log(`${type} health:`, data);
+                const healthStatusDiv = document.getElementById('health-status');
+                healthStatusDiv.classList.remove('hidden');
+                healthStatusDiv.textContent = JSON.stringify(data, null, 2);
+                showStatus(`${type} health check completed`, false);
+            })
+            .catch(error => {
+                console.error(`Error checking ${type} health:`, error);
+                showStatus(`Error checking ${type} health: ${error.message}`, true);
+            });
+        }
+        
+        function debugToken() {
+            fetch('/api/auth/debug-token', {
+                method: 'GET',
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Token debug:', data);
+                const debugElement = document.getElementById('debug-info');
+                debugElement.classList.remove('hidden');
+                debugElement.textContent = JSON.stringify(data, null, 2);
+                showStatus('Token debugging completed', false);
+            })
+            .catch(error => {
+                console.error('Error debugging token:', error);
+                showStatus('Error debugging token: ' + error.message, true);
+            });
+        }
+    </script>
+</body>
+</html> 

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FOMO Health Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; line-height: 1.6; }
+        button { margin: 10px 5px; padding: 10px 15px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; }
+        .refresh-btn { background-color: #4CAF50; color: white; }
+        .back-btn { background-color: #f44336; color: white; }
+        .dashboard-btn { background-color: #2196F3; color: white; }
+        .error { color: #d32f2f; }
+        .warning { color: #f57c00; }
+        .success { color: #388e3c; }
+        .card { box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .health-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .health-card { background-color: #f5f5f5; transition: all 0.3s ease; }
+        .health-card:hover { transform: translateY(-5px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
+        .health-card h3 { margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+        .health-status { padding: 10px; border-radius: 4px; margin-top: 10px; }
+        .health-title { display: flex; justify-content: space-between; align-items: center; }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-healthy { background-color: #e8f5e9; color: #388e3c; }
+        .status-degraded { background-color: #fff3e0; color: #f57c00; }
+        .status-unhealthy { background-color: #ffebee; color: #d32f2f; }
+        .metrics { font-family: monospace; white-space: pre-wrap; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+        h1, h2 { color: #333; }
+        .timestamp { font-size: 12px; color: #666; text-align: right; }
+        .controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .navigation-links { margin: 10px 0; font-size: 14px; }
+        .navigation-links a { color: #2196F3; text-decoration: none; margin: 0 5px; }
+        .navigation-links a:hover { text-decoration: underline; }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .summary-panel {
+            background-color: #e8f5e9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .summary-panel.degraded {
+            background-color: #fff3e0;
+        }
+        .summary-panel.unhealthy {
+            background-color: #ffebee;
+        }
+        .summary-status {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .summary-metrics {
+            display: flex;
+            gap: 15px;
+        }
+        .summary-metric {
+            text-align: center;
+            padding: 5px 10px;
+            border-radius: 4px;
+            background-color: rgba(255, 255, 255, 0.7);
+        }
+        .summary-metric span {
+            font-size: 18px;
+            font-weight: bold;
+            display: block;
+        }
+        .summary-metric label {
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="controls">
+            <h1>FOMO Health Dashboard</h1>
+            <div>
+                <button id="refreshButton" class="refresh-btn">Refresh All</button>
+                <button id="backButton" class="back-btn" onclick="window.close()">Close Dashboard</button>
+            </div>
+        </div>
+        <p>Comprehensive health status of all system components.</p>
+        <div class="navigation-links">
+            <a href="/">Back to FOMO Home</a> | 
+            <a href="/api/auth/test">Authentication Test</a> | 
+            <a href="/health/detailed" target="_blank">Raw Health Data</a>
+        </div>
+        <div id="timestamp" class="timestamp">Last updated: Never</div>
+        
+        <div id="summary-panel" class="summary-panel">
+            <div class="summary-status">Overall Status: <span id="overall-status">Checking...</span></div>
+            <div class="summary-metrics">
+                <div class="summary-metric">
+                    <span id="healthy-count">0</span>
+                    <label>Healthy</label>
+                </div>
+                <div class="summary-metric">
+                    <span id="degraded-count">0</span>
+                    <label>Degraded</label>
+                </div>
+                <div class="summary-metric">
+                    <span id="unhealthy-count">0</span>
+                    <label>Unhealthy</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="health-container" id="healthContainer">
+        <!-- Health cards will be inserted here -->
+        <div class="card health-card">
+            <div class="health-title">
+                <h3>Server</h3>
+                <span id="server-status" class="status-badge">Loading...</span>
+            </div>
+            <div id="server-details" class="health-status">
+                <div class="loading-spinner"></div> Loading server health information...
+            </div>
+        </div>
+        
+        <div class="card health-card">
+            <div class="health-title">
+                <h3>Database</h3>
+                <span id="database-status" class="status-badge">Loading...</span>
+            </div>
+            <div id="database-details" class="health-status">
+                <div class="loading-spinner"></div> Loading database health information...
+            </div>
+        </div>
+        
+        <div class="card health-card">
+            <div class="health-title">
+                <h3>Authentication</h3>
+                <span id="auth-status" class="status-badge">Loading...</span>
+            </div>
+            <div id="auth-details" class="health-status">
+                <div class="loading-spinner"></div> Loading authentication health information...
+            </div>
+        </div>
+        
+        <div class="card health-card">
+            <div class="health-title">
+                <h3>Payment</h3>
+                <span id="payment-status" class="status-badge">Loading...</span>
+            </div>
+            <div id="payment-details" class="health-status">
+                <div class="loading-spinner"></div> Loading payment health information...
+            </div>
+        </div>
+        
+        <div class="card health-card">
+            <div class="health-title">
+                <h3>WebSocket</h3>
+                <span id="websocket-status" class="status-badge">Loading...</span>
+            </div>
+            <div id="websocket-details" class="health-status">
+                <div class="loading-spinner"></div> Loading WebSocket health information...
+            </div>
+        </div>
+        
+        <div class="card health-card">
+            <div class="health-title">
+                <h3>Cache</h3>
+                <span id="cache-status" class="status-badge">Loading...</span>
+            </div>
+            <div id="cache-details" class="health-status">
+                <div class="loading-spinner"></div> Loading cache health information...
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('refreshButton').addEventListener('click', fetchAllHealth);
+            fetchAllHealth();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(fetchAllHealth, 30000);
+        });
+        
+        // Track the health status of all components
+        const componentsHealth = {
+            server: { status: 'unknown' },
+            database: { status: 'unknown' },
+            auth: { status: 'unknown' },
+            payment: { status: 'unknown' },
+            websocket: { status: 'unknown' },
+            cache: { status: 'unknown' }
+        };
+        
+        function fetchAllHealth() {
+            updateTimestamp();
+            
+            // Reset status badges to loading state
+            Object.keys(componentsHealth).forEach(component => {
+                const statusEl = document.getElementById(`${component}-status`);
+                if (statusEl) {
+                    statusEl.textContent = 'Loading...';
+                    statusEl.className = 'status-badge';
+                }
+                
+                const detailsEl = document.getElementById(`${component}-details`);
+                if (detailsEl) {
+                    detailsEl.innerHTML = '<div class="loading-spinner"></div> Loading health information...';
+                }
+            });
+            
+            // First fetch detailed health which includes data for all components
+            fetchDetailedHealth()
+                .then(() => {
+                    // Then fetch individual components for more detailed information
+                    return Promise.allSettled([
+                        fetchComponentHealth('database'),
+                        fetchComponentHealth('auth'),
+                        fetchComponentHealth('payment'),
+                        fetchComponentHealth('websocket'),
+                        fetchComponentHealth('cache')
+                    ]);
+                })
+                .then(() => {
+                    updateSummaryPanel();
+                })
+                .catch(error => {
+                    console.error('Error in health check sequence:', error);
+                });
+        }
+        
+        function updateTimestamp() {
+            const now = new Date();
+            document.getElementById('timestamp').textContent = 'Last updated: ' + now.toLocaleString();
+        }
+        
+        function fetchDetailedHealth() {
+            return fetch('/health/detailed')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Detailed health:', data);
+                    
+                    if (data && data.status) {
+                        // Update server status from the root health check
+                        updateComponentStatus('server', { 
+                            status: data.status,
+                            uptime: data.uptime,
+                            timestamp: data.timestamp,
+                            environment: data.environment
+                        });
+                    }
+                    
+                    if (data && data.components) {
+                        // Handle each component if they exist in the response
+                        if (data.components.server) 
+                            updateComponentStatus('server', data.components.server);
+                        if (data.components.database) 
+                            updateComponentStatus('database', data.components.database);
+                        if (data.components.authentication) 
+                            updateComponentStatus('auth', data.components.authentication);
+                        if (data.components.payment) 
+                            updateComponentStatus('payment', data.components.payment);
+                        if (data.components.websocket) 
+                            updateComponentStatus('websocket', data.components.websocket);
+                        if (data.components.cache) 
+                            updateComponentStatus('cache', data.components.cache);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching detailed health:', error);
+                    updateComponentStatus('server', { 
+                        status: 'unhealthy',
+                        error: error.message
+                    });
+                });
+        }
+        
+        function fetchComponentHealth(component) {
+            return fetch(`/health/${component}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log(`${component} health:`, data);
+                    updateComponentStatus(component, data);
+                })
+                .catch(error => {
+                    console.error(`Error fetching ${component} health:`, error);
+                    updateComponentStatus(component, { 
+                        status: 'unhealthy',
+                        error: error.message
+                    });
+                });
+        }
+        
+        function updateComponentStatus(component, data) {
+            const statusEl = document.getElementById(`${component}-status`);
+            const detailsEl = document.getElementById(`${component}-details`);
+            
+            if (!statusEl || !detailsEl) return;
+            
+            // Store the status in our tracking object
+            componentsHealth[component] = data;
+            
+            // Update status badge
+            let status = data.status || 'unknown';
+            statusEl.textContent = status.toUpperCase();
+            statusEl.className = 'status-badge ' + getStatusClass(status);
+            
+            // Format details
+            let detailsHtml = '';
+            
+            if (data.error) {
+                // Handle error state
+                detailsHtml = `<div class="error">Error: ${data.error}</div>`;
+            } else if (typeof data === 'object') {
+                // Create a copy to avoid modifying the original
+                const details = {...data};
+                delete details.status; // Remove status to avoid duplication
+                
+                detailsHtml = `<pre>${JSON.stringify(details, null, 2)}</pre>`;
+            } else {
+                detailsHtml = `<div>${data}</div>`;
+            }
+            
+            detailsEl.innerHTML = detailsHtml;
+        }
+        
+        function getStatusClass(status) {
+            if (!status) return 'status-unhealthy';
+            
+            switch(status.toLowerCase()) {
+                case 'healthy':
+                    return 'status-healthy';
+                case 'degraded':
+                    return 'status-degraded';
+                case 'unhealthy':
+                    return 'status-unhealthy';
+                default:
+                    return 'status-degraded';
+            }
+        }
+        
+        function updateSummaryPanel() {
+            // Count statuses
+            let healthy = 0;
+            let degraded = 0;
+            let unhealthy = 0;
+            
+            Object.values(componentsHealth).forEach(component => {
+                const status = (component.status || '').toLowerCase();
+                if (status === 'healthy') healthy++;
+                else if (status === 'degraded') degraded++;
+                else if (status === 'unhealthy') unhealthy++;
+            });
+            
+            // Update summary counts
+            document.getElementById('healthy-count').textContent = healthy;
+            document.getElementById('degraded-count').textContent = degraded;
+            document.getElementById('unhealthy-count').textContent = unhealthy;
+            
+            // Determine overall status
+            let overallStatus = 'Healthy';
+            let summaryClass = '';
+            
+            if (unhealthy > 0) {
+                overallStatus = 'Unhealthy';
+                summaryClass = 'unhealthy';
+            } else if (degraded > 0) {
+                overallStatus = 'Degraded';
+                summaryClass = 'degraded';
+            }
+            
+            // Update overall status
+            document.getElementById('overall-status').textContent = overallStatus;
+            
+            // Update summary panel class
+            const summaryPanel = document.getElementById('summary-panel');
+            summaryPanel.className = `summary-panel ${summaryClass}`;
+        }
+    </script>
+</body>
+</html> 

@@ -9,6 +9,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const timeout = require('connect-timeout');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 const { errorHandler } = require('./middleware/errorMiddleware.cjs');
 const { securityHeaders } = require('./middleware/securityMiddleware.cjs');
 const { configureRoutes } = require('./config/routes.cjs');
@@ -191,6 +192,9 @@ app.use(express.json({
     }
 }));
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static files from the public directory
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Phase 4: Authentication
 const gradualAuthMiddleware = require('./middleware/gradualAuthMiddleware.cjs');

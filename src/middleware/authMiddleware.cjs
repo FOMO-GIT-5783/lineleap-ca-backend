@@ -17,7 +17,6 @@ const authLogger = logger.child({
 
 // Public paths that don't require authentication
 const PUBLIC_PATHS = [
-    '/api/health/basic',
     '/api/health',
     '/api/monitoring',
     '/api/auth/callback',

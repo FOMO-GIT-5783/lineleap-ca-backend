@@ -5,7 +5,7 @@ const { ORDER_EVENTS } = require('../utils/constants.cjs');
 const { createError, ERROR_CODES } = require('../utils/errors.cjs');
 const logger = require('../utils/logger.cjs');
 const { emitVenueUpdate } = require('../websocket/socketManager.cjs');
-const { HalifaxMetricRecorder, FOMO_METRIC_TYPES } = require('./MetricService.cjs');
+const { HalifaxMetricRecorder, FOMO_METRIC_TYPES, CORE_METRIC_TYPES } = require('./MetricService.cjs');
 const LockManager = require('../utils/lockManager.cjs');
 const PassService = require('../services/passService.cjs');
 
@@ -184,6 +184,13 @@ class OrderService {
         await metricService.record(FOMO_METRIC_TYPES.DRINK.FULFILLMENT, {
             venueId: order.venueId,
             itemCount: order.items.length
+        });
+
+        // Track manual verification by staff
+        await metricService.record(CORE_METRIC_TYPES.PASS.STAFF_VERIFICATION, {
+            orderId: order._id,
+            success: true,
+            staffId: order.staffVerification?.staffId
         });
 
         return order;

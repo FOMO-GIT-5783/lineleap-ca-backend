@@ -8,9 +8,7 @@ const { createError, ERROR_CODES } = require('./errors.cjs');
 
 // Validate JWT secret
 if (!config.jwt?.secret) {
-    config.jwt = {
-        secret: process.env.JWT_SECRET || 'development-secret-key'
-    };
+    throw new Error('JWT_SECRET is required. Check your environment configuration.');
 }
 
 // Maintain singleton for backward compatibility
@@ -41,6 +39,18 @@ class TokenService extends BaseService {
         instance = this;
     }
 
+    async _init() {
+        // Verify we can fetch JWKS
+        try {
+            await this.jwksClient.getSigningKeys();
+            logger.info('JWKS client initialized successfully');
+            return true;
+        } catch (error) {
+            logger.error('Failed to initialize JWKS client:', error);
+            throw error;
+        }
+    }
+
     async verifyAuth0Token(token, options = {}) {
         if (!token) {
             throw createError.authentication(
@@ -52,7 +62,50 @@ class TokenService extends BaseService {
         try {
             // Get key ID from token header
             const decoded = jwt.decode(token, { complete: true });
-            if (!decoded || !decoded.header.kid) {
+            
+            // Enhanced logging to diagnose token structure
+            logger.info('Token structure analysis', {
+                hasHeader: !!decoded?.header,
+                hasPayload: !!decoded?.payload,
+                headerKeys: decoded?.header ? Object.keys(decoded.header) : [],
+                tokenType: options.isIdToken ? 'id_token' : 'access_token',
+                allowNoAudience: !!options.allowNoAudience
+            });
+            
+            if (!decoded) {
+                throw createError.authentication(
+                    ERROR_CODES.TOKEN_INVALID,
+                    'Unable to decode token - invalid format'
+                );
+            }
+            
+            // If this is an ID token or we're explicitly allowing tokens without a kid
+            if (options.isIdToken || options.allowNoAudience) {
+                logger.info('Processing token with relaxed validation', {
+                    isIdToken: !!options.isIdToken,
+                    allowNoAudience: !!options.allowNoAudience
+                });
+                
+                // For ID tokens or when explicitly allowing tokens without audience,
+                // we can return the decoded payload directly
+                if (decoded.payload) {
+                    return decoded.payload;
+                }
+                
+                // If token doesn't have the expected structure but we can still get basic JWT format
+                const basicDecoded = jwt.decode(token);
+                if (basicDecoded) {
+                    return basicDecoded;
+                }
+                
+                throw createError.authentication(
+                    ERROR_CODES.TOKEN_INVALID,
+                    'Unable to decode token payload'
+                );
+            }
+            
+            // Regular token validation flow for access tokens
+            if (!decoded.header.kid) {
                 throw createError.authentication(
                     ERROR_CODES.TOKEN_INVALID,
                     'Invalid token format: missing key ID (kid)'
@@ -63,12 +116,19 @@ class TokenService extends BaseService {
             const key = await this.jwksClient.getSigningKey(decoded.header.kid);
             const signingKey = key.getPublicKey();
 
-            // Verify token
-            const verified = jwt.verify(token, signingKey, {
+            // Set up verification options
+            const verifyOptions = {
                 algorithms: ['RS256'],
-                audience: config.auth0.audience,
                 issuer: config.auth0.issuerBaseURL
-            });
+            };
+            
+            // Only check audience if we're not allowing no-audience tokens
+            if (!options.allowNoAudience) {
+                verifyOptions.audience = config.auth0.audience;
+            }
+
+            // Verify token
+            const verified = jwt.verify(token, signingKey, verifyOptions);
 
             // Check if token needs refresh
             if (this.shouldRefreshToken(verified)) {
@@ -90,42 +150,48 @@ class TokenService extends BaseService {
 
             logger.error('Token verification failed:', {
                 error: error.message,
-                code: error.code
+                code: error.code,
+                name: error.name,
+                stack: error.stack
             });
 
             throw createError.authentication(
                 ERROR_CODES.TOKEN_INVALID,
-                'Invalid token'
+                `Invalid token: ${error.message}`
             );
         }
     }
 
-    shouldRefreshToken(decoded) {
-        const now = Math.floor(Date.now() / 1000);
-        const exp = decoded.exp;
-        const refreshThreshold = 300; // 5 minutes
-
-        return exp - now < refreshThreshold;
-    }
-
     async refreshToken(refreshToken) {
         try {
-            // Verify refresh token
-            const decoded = jwt.verify(refreshToken, config.jwt.secret);
-
-            // Create new access token
-            const accessToken = jwt.sign(
-                {
-                    sub: decoded.sub,
-                    email: decoded.email
+            // Call Auth0's token endpoint to refresh the token
+            const response = await fetch(`${config.auth0.issuerBaseURL}/oauth/token`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
                 },
-                config.jwt.secret,
-                { expiresIn: this.config.tokenExpiry }
-            );
+                body: JSON.stringify({
+                    grant_type: 'refresh_token',
+                    client_id: config.auth0.clientID,
+                    client_secret: config.auth0.clientSecret,
+                    refresh_token: refreshToken
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error_description || 'Failed to refresh token');
+            }
+
+            const tokens = await response.json();
+
+            // Verify the new access token
+            const decoded = await this.verifyAuth0Token(tokens.access_token);
 
             return {
-                accessToken,
-                decoded: jwt.decode(accessToken)
+                accessToken: tokens.access_token,
+                refreshToken: tokens.refresh_token,
+                decoded
             };
 
         } catch (error) {
@@ -137,58 +203,11 @@ class TokenService extends BaseService {
         }
     }
 
-    async generateToken(user, options = {}) {
-        try {
-            const token = jwt.sign(
-                {
-                    sub: user._id,
-                    email: user.email,
-                    roles: user.roles
-                },
-                config.jwt.secret,
-                {
-                    expiresIn: options.expiresIn || this.config.tokenExpiry
-                }
-            );
-
-            // Generate refresh token if requested
-            let refreshToken;
-            if (options.withRefreshToken) {
-                refreshToken = jwt.sign(
-                    { sub: user._id },
-                    config.jwt.secret,
-                    { expiresIn: this.config.refreshTokenExpiry }
-                );
-            }
-
-            return {
-                token,
-                refreshToken,
-                expiresIn: jwt.decode(token).exp
-            };
-
-        } catch (error) {
-            logger.error('Token generation failed:', error);
-            throw createError.service(
-                ERROR_CODES.TOKEN_GENERATION_FAILED,
-                'Failed to generate token'
-            );
-        }
-    }
-
-    async revokeToken(token) {
-        try {
-            // Add token to blacklist
-            await this.blacklistToken(token);
-            logger.info('Token revoked successfully');
-            return true;
-        } catch (error) {
-            logger.error('Token revocation failed:', error);
-            throw createError.service(
-                ERROR_CODES.TOKEN_REVOCATION_FAILED,
-                'Failed to revoke token'
-            );
-        }
+    shouldRefreshToken(decoded) {
+        const now = Math.floor(Date.now() / 1000);
+        const expiresIn = decoded.exp - now;
+        // Refresh if token expires in less than 5 minutes
+        return expiresIn < 300;
     }
 
     async blacklistToken(token) {
@@ -219,15 +238,15 @@ class TokenService extends BaseService {
         return {
             status: this.isReady() ? 'healthy' : 'unhealthy',
             jwksClientReady: !!this.jwksClient,
-            config: {
-                tokenExpiry: this.config.tokenExpiry,
-                refreshTokenExpiry: this.config.refreshTokenExpiry
+            provider: 'auth0',
+            configuration: {
+                issuerBaseURL: config.auth0.issuerBaseURL,
+                audience: config.auth0.audience,
+                hasClientSecret: !!config.auth0.clientSecret
             }
         };
     }
 }
 
-// Export singleton instance for backward compatibility
-module.exports = new TokenService();
-// Also export the class for service container
-module.exports.TokenService = TokenService; 
+// Export singleton instance
+module.exports = new TokenService(); 

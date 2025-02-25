@@ -36,9 +36,10 @@ const securityHeaders = helmet({
             scriptSrc: ["'self'", "'unsafe-inline'", 'js.stripe.com'],
             styleSrc: ["'self'", "'unsafe-inline'"],
             imgSrc: ["'self'", 'data:', 'https:'],
-            connectSrc: ["'self'", 'api.stripe.com'],
+            connectSrc: ["'self'", 'api.stripe.com', 'dev-vcxivfkv8x4robxr.us.auth0.com'],
             frameSrc: ["'self'", 'js.stripe.com'],
             objectSrc: ["'none'"],
+            scriptSrcAttr: ["'unsafe-inline'"],  // Allow inline event handlers
             upgradeInsecureRequests: [],
         },
     },

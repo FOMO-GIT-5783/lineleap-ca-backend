@@ -72,13 +72,16 @@ const formatOrderForDisplay = (order) => {
         },
         createdAt: order.createdAt,
         updatedAt: order.updatedAt,
-        statusHistory: order.statusHistory.map(history => ({
-            status: history.status,
-            timestamp: history.timestamp,
-            by: history.bartenderId ? 'Bartender' : 'System'
-        }))
+        statusHistory: order.statusHistory.map(history => formatOrderHistory(history))
     };
 };
+
+// Format order history
+const formatOrderHistory = (history) => ({
+    status: history.status,
+    timestamp: history.timestamp,
+    by: history.staffId ? 'Staff' : 'System'
+});
 
 // Generate unique order reference
 const generateOrderReference = () => {

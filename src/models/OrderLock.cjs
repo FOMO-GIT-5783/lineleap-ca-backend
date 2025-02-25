@@ -4,8 +4,7 @@ const orderLockSchema = new mongoose.Schema({
   idempotencyKey: {
     type: String,
     required: true,
-    unique: true,
-    index: true
+    unique: true
   },
   status: {
     type: String,
@@ -16,13 +15,11 @@ const orderLockSchema = new mongoose.Schema({
   metadata: {
     venueId: {
       type: String,
-      required: true,
-      index: true
+      required: true
     },
     userId: {
       type: String,
-      required: true,
-      index: true
+      required: true
     },
     amount: {
       type: Number,
@@ -49,14 +46,12 @@ const orderLockSchema = new mongoose.Schema({
   collection: 'order_locks'
 });
 
-// Compound index for faster queries
-orderLockSchema.index({ 'metadata.venueId': 1, 'metadata.userId': 1, createdAt: -1 });
-
-// Ensure idempotency key is unique
+// Define all indexes in one place
 orderLockSchema.index({ idempotencyKey: 1 }, { unique: true });
-
-// Add TTL index
 orderLockSchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400 });
+orderLockSchema.index({ 'metadata.venueId': 1, 'metadata.userId': 1, createdAt: -1 });
+orderLockSchema.index({ 'metadata.venueId': 1 });
+orderLockSchema.index({ 'metadata.userId': 1 });
 
 // Pre-save middleware
 orderLockSchema.pre('save', function(next) {
