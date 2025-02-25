@@ -26,3 +26,4 @@ yarn-error.log*
 # Build outputs
 /build
 /dist
+.env.development
